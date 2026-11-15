@@ -31,6 +31,7 @@ Window {
         id: panel
         sessions: backend.sessions
         history: backend.history
+        limits: backend.limits
         theme: backend.config.theme || "tokyo-night"
         width: backend.config.width || 460
         fontFamily: backend.config.font || ""

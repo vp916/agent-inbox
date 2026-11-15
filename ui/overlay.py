@@ -19,6 +19,7 @@ class Backend(QObject):
     def __init__(self):
         super().__init__()
         self._sessions, self._visible, self._view, self._config, self._history = [], False, "inbox", {}, []
+        self._limits = {}
         self.sock = QLocalSocket(self)
         self.sock.connected.connect(lambda: self._write({"kind": "subscribe", "role": "overlay"}))
         self.sock.readyRead.connect(self._read)
@@ -46,6 +47,7 @@ class Backend(QObject):
                 self._view = snap["ui"]["view"]
                 self._config = snap.get("config") or {}
                 self._history = snap.get("history") or []
+                self._limits = snap.get("limits") or {}
         self.changed.emit()
 
     def _write(self, msg):
@@ -55,6 +57,10 @@ class Backend(QObject):
     @Property("QVariantList", notify=changed)
     def sessions(self):
         return self._sessions
+
+    @Property("QVariantMap", notify=changed)
+    def limits(self):
+        return self._limits
 
     @Property("QVariantList", notify=changed)
     def history(self):

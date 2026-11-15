@@ -7,6 +7,7 @@ Rectangle {
     property var sessions: []
     property string view: "inbox"   // inbox | all | today
     property var history: []        // today's turns, newest first (only filled in the today view)
+    property var limits: ({})       // plan usage: five_hour / seven_day -> {pct, resets_at}, plus warn
     property int maxBody: 640       // the list scrolls beyond this height
     property var open: ({})         // session id -> expanded
     signal command(string cmd, string session, string label)
@@ -69,6 +70,15 @@ Rectangle {
     function dur(s) {
         s = Math.max(0, Math.round(s))
         return s < 60 ? s + "s" : s < 3600 ? Math.floor(s / 60) + "m" : Math.floor(s / 3600) + "h " + Math.floor(s % 3600 / 60) + "m"
+    }
+    function usage(key, name) {
+        const w = limits[key]
+        if (!w) return ""
+        const cells = Math.min(8, Math.round(w.pct / 12.5))
+        const col = w.pct >= 95 ? cRed : w.pct >= (limits.warn || 80) ? cAmber : cSoft
+        const day = key === "seven_day" ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(w.resets_at * 1000).getDay()] + " " : ""
+        return name + " <font color='" + col + "'>" + "█".repeat(cells) + "</font>" + "░".repeat(8 - cells)
+             + " <font color='" + col + "'>" + w.pct + "%</font> → " + day + clock(w.resets_at).slice(0, 5)
     }
     function clock(t) { return new Date(t * 1000).toTimeString().slice(0, 8) }
     function esc(t) { return String(t || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") }
@@ -293,7 +303,7 @@ Rectangle {
                                 Label {
                                     anchors.left: name.right; anchors.leftMargin: 10; anchors.baseline: name.baseline
                                     text: (row.s.entry || "").replace("claude-", "") + (row.s.subagents ? "  +" + row.s.subagents + " agents" : "")
-                                          + (row.s.ctx_tokens ? "  ctx " + panel.k(row.s.ctx_tokens) + " · out " + panel.k(row.s.out_tokens) : "")
+                                          + (row.s.ctx_tokens ? "  ctx " + panel.k(row.s.ctx_tokens) + (row.s.ctx_pct ? " " + row.s.ctx_pct + "%" : "") + " · out " + panel.k(row.s.out_tokens) : "")
                                     color: panel.cDim; font.pixelSize: 11
                                 }
                                 Label {
@@ -482,6 +492,21 @@ Rectangle {
                         }
                     }
                 }
+            }
+        }
+
+        // ---- plan usage
+        Item {
+            visible: !!(panel.limits.five_hour || panel.limits.seven_day)
+            width: parent.width; height: 30
+            Rectangle { width: parent.width; height: 1; color: panel.cLine }
+            Label {
+                x: 14; width: parent.width - 28
+                anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.StyledText
+                font.pixelSize: 11; color: panel.cDim
+                elide: Text.ElideRight
+                text: [panel.usage("five_hour", "5h"), panel.usage("seven_day", "7d")].filter(x => x).join("&nbsp;&nbsp;&nbsp;")
             }
         }
     }

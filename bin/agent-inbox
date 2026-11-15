@@ -51,6 +51,10 @@ def render(snap):
         out.append(f"\033[{COLOR[kind]}m{line}\033[0m" if TTY else line)
     need = sum(1 for s in snap["sessions"] if s["attention"])
     head = f"agents: {len(snap['sessions'])} open, {need} need you | overlay {'shown' if ui['visible'] else 'hidden'}, view {ui['view']}"
+    lim = snap.get("limits") or {}
+    use = [f"{n} {lim[k]['pct']}%" for k, n in (("five_hour", "5h"), ("seven_day", "7d")) if k in lim]
+    if use:
+        head += " | usage " + ", ".join(use)
     return "\n".join([head] + out)
 
 

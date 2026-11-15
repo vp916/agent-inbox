@@ -55,7 +55,7 @@ Window {
         padding: 24; spacing: 24
         Row {
             spacing: 24
-            Panel { sessions: win.mock; view: "inbox" }
+            Panel { sessions: win.mock; view: "inbox"; limits: ({ five_hour: { pct: 62, resets_at: win.t + 5400 }, seven_day: { pct: 84, resets_at: win.t + 260000 }, warn: 80 }) }
             Panel { sessions: win.mock; view: "all"; open: ({ c3: true, h8: true }); picks: ({ g7: [["Tests", "Lint"], ["Staging"]] }) }
             Column {
                 spacing: 24

@@ -23,9 +23,11 @@ DAEMON_UNIT = UNITS / "agent-inbox.service"
 OVERLAY_UNIT = UNITS / "agent-inbox-overlay.service"
 LINK = HOME / ".local/bin/agent-inbox"
 MARK = "agent_inbox_hook.py"
+STATUS_MARK = "agent_inbox_statusline.py"
 # The system interpreter is the one distro PySide6 packages install into.
 PY = "/usr/bin/python3" if os.path.exists("/usr/bin/python3") else sys.executable
 CMD = f"{PY} -I -S {shlex.quote(str(ROOT / 'hook' / MARK))} || true"
+STATUS_CMD = f"{PY} -I -S {shlex.quote(str(ROOT / 'hook' / STATUS_MARK))}"
 EVENTS = [
     "SessionStart", "UserPromptSubmit", "PreToolUse", "PermissionRequest", "PermissionDenied",
     "PostToolUse", "PostToolUseFailure", "Notification", "SubagentStart", "SubagentStop",
@@ -60,8 +62,19 @@ def edit_hooks(add):
         settings["hooks"] = hooks
     else:
         settings.pop("hooks", None)
+    # Plan usage only reaches us through the status line. Never replace someone's own.
+    line = settings.get("statusLine")
+    ours = isinstance(line, dict) and STATUS_MARK in line.get("command", "")
+    kept_other = False
+    if add and (line is None or ours):
+        settings["statusLine"] = {"type": "command", "command": STATUS_CMD}
+    elif add:
+        kept_other = True
+    elif ours:
+        del settings["statusLine"]
     SETTINGS.parent.mkdir(parents=True, exist_ok=True)
     SETTINGS.write_text(json.dumps(settings, indent=2) + "\n")
+    return kept_other
 
 
 def check():
@@ -115,7 +128,11 @@ def install():
     LINK.parent.mkdir(parents=True, exist_ok=True)
     LINK.unlink(missing_ok=True)
     LINK.symlink_to(ROOT / "bin/agent-inbox")
-    edit_hooks(add=True)
+    if edit_hooks(add=True):
+        problems.append(
+            "You already have a custom status line, so it was left alone and the plan-usage display is off. "
+            f"To turn it on, pipe your status line's input through {ROOT / 'hook' / STATUS_MARK} as well."
+        )
     print(f"Installed.\n  hooks:    {SETTINGS} (backup: {BACKUP.name})\n  services: {', '.join(units)}\n  command:  {LINK}")
     print("Bind `agent-inbox toggle` to a key to show and hide the overlay.")
     for p in problems:

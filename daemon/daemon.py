@@ -3,6 +3,7 @@
 
 One unix socket, newline-delimited JSON. The first line of a connection sets its role:
   {"kind":"event","event":{...}}         from the hook script
+  {"kind":"status","status":{...}}       from the status line script: plan usage and context share
   {"kind":"ask","event":{...}}           a PermissionRequest; the hook waits for {"decision":...} or EOF
   {"kind":"cmd","cmd":"toggle",...}      one command, one snapshot reply
   {"kind":"subscribe","role":"overlay"}  snapshot on every change; further lines are commands
@@ -35,6 +36,7 @@ DEFAULTS = {
     "done_min_turn": 30,  # s a turn must run before "finished" counts as needing you
     "keep_days": 14,  # event log retention
     "sound": True,  # play a short sound when the overlay pops up
+    "usage_warn": 80,  # % of the 5-hour or 7-day plan limit that triggers a warning
     "theme": "tokyo-night",  # tokyo-night | catppuccin | gruvbox | nord
 }
 STALE_HOURS = 6  # drop sessions with unknown pid after this long without events
@@ -85,6 +87,8 @@ class Daemon:
         self.usage = {}  # session id -> {"pos", "out", "ctx", "at"}: transcript reading state
         self.pending = {}  # session id -> {"fut", "ts", "input"}: a hook waiting for an answer
         self.ui = {"visible": False, "view": "inbox", "auto": False}  # view: inbox | all | today
+        self.limits = {}  # "five_hour" / "seven_day" -> {"pct", "resets_at"}, from the status line
+        self.warned = {}  # window -> resets_at already warned about
         self.history = []  # today's turns, only kept fresh while the "today" view is open
 
     # ---- state out
@@ -95,6 +99,7 @@ class Daemon:
             "type": "state", "now": time.time(), "ui": self.ui, "config": look,
             "sessions": [asdict(s) for s in ss],
             "history": self.history if self.ui["view"] == "today" else [],
+            "limits": {**{k: w for k, w in self.limits.items() if w["resets_at"] > time.time()}, "warn": self.cfg["usage_warn"]},
         }  # fmt: skip
 
     def load_history(self):
@@ -185,6 +190,29 @@ class Daemon:
                 asyncio.get_running_loop().call_later(delay, self.alert, sid, s.attention["ts"])
         self.settle()
         self.broadcast()
+
+    def on_status(self, st):
+        """Plan usage is account-wide, so the latest report from any session wins."""
+        before = json.dumps(self.limits)
+        for key, name in (("five_hour", "5-hour"), ("seven_day", "7-day")):
+            w = (st.get("rate_limits") or {}).get(key)
+            if not isinstance(w, dict) or w.get("used_percentage") is None:
+                continue
+            pct, resets = round(float(w["used_percentage"])), w.get("resets_at") or 0
+            self.limits[key] = {"pct": pct, "resets_at": resets}
+            if pct >= self.cfg["usage_warn"] and self.warned.get(key) != resets:
+                self.warned[key] = resets
+                when = time.strftime("%a %H:%M", time.localtime(resets))
+                asyncio.ensure_future(notify(f"Claude usage: {name} limit at {pct}%", f"Resets {when}"))
+                if self.cfg["sound"]:
+                    asyncio.ensure_future(play("dialog-warning"))
+        s = self.sessions.get(st.get("session_id"))
+        ctx = st.get("ctx_pct")
+        changed = json.dumps(self.limits) != before
+        if s and ctx is not None and s.ctx_pct != round(ctx):
+            s.ctx_pct, changed = round(ctx), True
+        if changed:
+            self.broadcast()
 
     def read_usage(self, s, path, now, force):
         """Token counts from the session transcript, read incrementally."""
@@ -321,6 +349,8 @@ class Daemon:
             kind = m.get("kind")
             if kind == "event":
                 self.on_event(m.get("event") or {})
+            elif kind == "status":
+                self.on_status(m.get("status") or {})
             elif kind == "ask":
                 await self.ask(m.get("event") or {}, r, w)
             elif kind == "cmd":

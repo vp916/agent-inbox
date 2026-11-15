@@ -10,6 +10,7 @@ A floating overlay for Linux that shows what your open Claude Code sessions are 
 - **Token counts.** Each card shows the session's current context size and total output tokens.
 - **Today.** A third tab lists today's turns across all projects: when, how long, how many tool calls, the prompt and how it ended.
 - **Themes.** Tokyo Night, Catppuccin, Gruvbox and Nord.
+- **Plan usage.** On Pro and Max plans the overlay shows how much of the 5-hour and 7-day limits you have used, and warns you when you cross a threshold.
 - **Stays out of the way.** Sits above other windows, only takes keyboard focus when you click a reply box, hides itself when nothing needs you.
 - **Local only.** One unix socket, no network port, no telemetry.
 
@@ -42,6 +43,7 @@ This does three things, all reversed by `python3 install.py uninstall`:
 | Change | Where |
 |---|---|
 | Hook entries (your existing settings are kept, a backup is made first) | `~/.claude/settings.json` |
+| A status line showing model, context and plan usage (only if you have none) | `~/.claude/settings.json` |
 | Two user services: daemon and overlay | `~/.config/systemd/user/agent-inbox*.service` |
 | The `agent-inbox` command | `~/.local/bin/agent-inbox` |
 
@@ -104,7 +106,8 @@ Optional. Create `~/.config/agent-inbox/config.json` with any of these keys (def
   "done_min_turn": 30,
   "keep_days": 14,
   "sound": true,
-  "theme": "tokyo-night"
+  "theme": "tokyo-night",
+  "usage_warn": 80
 }
 ```
 
@@ -114,6 +117,7 @@ Optional. Create `~/.config/agent-inbox/config.json` with any of these keys (def
 - `done_min_turn`: seconds a turn must run before "finished" counts as needing you.
 - `keep_days`: how long the event log is kept.
 - `theme`: `tokyo-night`, `catppuccin`, `gruvbox` or `nord`.
+- `usage_warn`: percentage of the 5-hour or 7-day plan limit at which you get a warning notification.
 - `sound`: play a short sound when the overlay pops up (needs `pw-play` or `paplay` and the freedesktop sound theme).
 
 ## How it works
@@ -125,6 +129,10 @@ Claude Code hooks -> hook/agent_inbox_hook.py -> unix socket -> daemon/daemon.py
 - **Hook script.** Forwards each hook event to the daemon and exits. It runs in the background, takes about 15 ms, and exits cleanly if the daemon is not running, so it never slows or blocks the agent. The one hook that waits is the permission request: it holds on for an answer from the overlay while Claude Code shows its own prompt as usual.
 - **Daemon.** Keeps one state per session (`daemon/state.py`, a small pure state machine), decides what needs attention and when to pop the overlay up, and removes sessions whose process has gone.
 - **Overlay.** A PySide6/QML window placed with layer-shell. `ui/Panel.qml` is the whole look; `ui/Preview.qml` renders it with sample data.
+
+## Plan usage and the status line
+
+Claude Code only exposes plan usage to a status line script, so the installer sets one up: a row at the bottom of each terminal session such as `Fable 5.2 · ctx 34% · 5h 62% · 7d 41%`. The same numbers appear at the bottom of the overlay. They show up after a session's first response, and only on claude.ai subscription plans. If you already have a status line it is left untouched and this feature stays off. To remove ours, delete the `statusLine` entry from `~/.claude/settings.json`.
 
 ## Privacy
 

@@ -73,6 +73,7 @@ class Session:
     subagents: int = 0
     ctx_tokens: int = 0  # size of the context sent with the latest request
     out_tokens: int = 0  # output tokens over the whole session
+    ctx_pct: int = 0  # share of the context window in use, from the status line
     ended: bool = False
 
     @classmethod
