@@ -1,10 +1,10 @@
 # agent-inbox
 
-A floating overlay for Linux that shows what your open Claude Code sessions are doing, pops up when one needs you, and lets you answer without switching windows. Codex CLI, GitHub Copilot and Antigravity sessions are shown too (see Supported agents).
+One inbox for your coding agents. A floating overlay for Linux that shows what every agent session on your machine is doing (Claude Code, Codex, GitHub Copilot, Antigravity), pops up when one needs you, and lets you answer without switching windows.
 
 ![demo](docs/demo.gif)
 
-- **Sees every session.** Any terminal, any folder, and the VS Code extension, through Claude Code hooks.
+- **Sees every session.** Any terminal, any folder, any editor, through each agent's own hook system. Every card is tagged with its agent.
 - **Works like an inbox.** A session appears when it asks for permission, asks a question, fails, or finishes a long turn. It disappears once you have dealt with it.
 - **Answer from the overlay.** Approve or deny a permission prompt. Answer the agent's questions by picking options or typing your own reply, including multi-part and multi-select questions. The prompt in the terminal keeps working too; whichever you answer first wins.
 - **Token counts.** Each card shows the session's current context size and total output tokens.
@@ -139,8 +139,8 @@ Each card carries a coloured tag naming the agent and where it runs (`■ claude
 | Agent | Shown in the overlay | Answer from the overlay | State |
 |---|---|---|---|
 | Claude Code (terminal, VS Code extension) | actions, permission, questions, plans, done, errors | approve / deny, options, typed replies | tested |
-| Codex CLI | actions, permission, done | approve / deny (see note) | watching tested on live sessions; answering not yet |
-| GitHub Copilot (CLI and the VS Code agent) | actions, permission, done, errors | no | simulated events only |
+| Codex CLI | actions, permission, done | approve / deny | tested live |
+| GitHub Copilot (CLI and the VS Code agent) | actions, permission, done, errors | approve / deny | watching tested live in VS Code; answering simulated only |
 | Antigravity | actions (after each tool call), done | no | simulated events only |
 
 The installer adds hooks for every agent it finds on the machine:
@@ -154,8 +154,10 @@ The installer adds hooks for every agent it finds on the machine:
 
 Notes:
 
-- **Codex** only runs hooks you have approved. Open Codex, type `/hooks`, and trust the agent-inbox entries; do this again after an agent-inbox update changes them. Its permission hook waits up to 60 seconds for an answer from the overlay. Whether Codex shows its own prompt during that wait has not been verified.
-- **Copilot and Antigravity** are watch only. Antigravity reports a tool call after it ran, and its permission prompts are not visible to hooks we can safely use.
+- **Codex** only runs hooks you have approved. Open Codex, type `/hooks`, and trust the agent-inbox entries; do this again after an agent-inbox update changes them.
+- **Codex and Copilot hold their own prompt while the overlay waits** (Claude Code shows both at once). So for these two the card pops up immediately, and `answer there` on the card hands the question back to the agent's own prompt. If you do nothing, their prompt appears after 60 seconds.
+- **Questions with options** can be answered from the overlay for Claude Code only. Codex and Copilot give hooks no way to answer them.
+- **Antigravity** is watch only: a tool call is reported after it ran. Its only pre-execution hook would have to decide every tool call, so it is not used.
 - Token counts and plan usage are Claude Code only. Sessions of other agents appear at their first event.
 - The session `stop` button is offered for agents that run as their own process (Claude Code, Codex, Copilot CLI), not for agents inside an editor.
 

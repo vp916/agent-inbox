@@ -123,7 +123,7 @@ def edit_copilot(add):
         COPILOT_HOOKS.unlink(missing_ok=True)
         return True
     cmd = CMD.replace(" || true", " copilot || true")
-    hooks = {e: [{"type": "command", "bash": cmd, "timeoutSec": 5}] for e in COPILOT_EVENTS}
+    hooks = {e: [{"type": "command", "bash": cmd, "timeoutSec": 70 if e == "PermissionRequest" else 5}] for e in COPILOT_EVENTS}
     COPILOT_HOOKS.parent.mkdir(exist_ok=True)
     COPILOT_HOOKS.write_text(json.dumps({"version": 1, "hooks": hooks}, indent=2) + "\n")
     return True
@@ -137,10 +137,12 @@ def edit_antigravity(add):
     data = json.loads(ANTIGRAVITY_HOOKS.read_text()) if ANTIGRAVITY_HOOKS.exists() else {}
     data.pop("agent-inbox", None)
     if add:
-        data["agent-inbox"] = {
-            e: [{"hooks": [{"type": "command", "command": CMD.replace(" || true", f" antigravity {e} || true"), "timeout": 5}]}]
-            for e in ANTIGRAVITY_EVENTS
-        }
+        def entry(event):
+            hook = {"type": "command", "command": CMD.replace(" || true", f" antigravity {event} || true"), "timeout": 5}
+            # tool events are grouped under a matcher; the other events list the hook directly
+            return {"matcher": "*", "hooks": [hook]} if event == "PostToolUse" else hook
+
+        data["agent-inbox"] = {"enabled": True, **{e: [entry(e)] for e in ANTIGRAVITY_EVENTS}}
     if data:
         ANTIGRAVITY_HOOKS.parent.mkdir(exist_ok=True)
         ANTIGRAVITY_HOOKS.write_text(json.dumps(data, indent=2) + "\n")

@@ -347,7 +347,8 @@ Rectangle {
                                     }
                                     Button {
                                         visible: !!row.a
-                                        text: "dismiss"
+                                        // agents other than Claude Code hold their own prompt while we wait
+                                        text: row.a && row.a.answerable && row.s.agent !== "claude" ? "answer there" : "dismiss"
                                         onClicked: panel.command("dismiss", row.s.id, "")
                                     }
                                     Button {

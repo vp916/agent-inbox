@@ -12,9 +12,9 @@ Must never slow or block the agent: stdlib only, 1 s socket timeout, every error
 swallowed, always exits 0.
 
 A permission request is the one event that waits: the daemon may send back a decision
-made in the overlay. That is only done for agents known to show their own prompt at the
-same time (ASK_WAIT), so the terminal stays usable; the daemon closes the connection once
-the request is answered there.
+made in the overlay. Claude Code shows its own prompt at the same time, so either side can
+answer. Codex and Copilot hold their prompt until the hook returns, so for them the wait
+is short (ASK_WAIT) and the overlay offers "answer there", which releases the hook.
 """
 import json
 import os
@@ -23,10 +23,8 @@ import sys
 
 SOCK = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}") + "/agent-inbox.sock"
 MAX_STR = 2000
-# s to wait for an answer from the overlay, per agent. Claude Code shows its own prompt
-# while the hook waits (verified). Codex is not verified yet, so its wait is kept short:
-# if its prompt turns out to be held back, it appears after this at the latest.
-ASK_WAIT = {"claude": 300, "codex": 60}
+# s to wait for an answer from the overlay, per agent
+ASK_WAIT = {"claude": 300, "codex": 60, "copilot": 60}
 
 
 def trim(v):
@@ -117,6 +115,8 @@ def main():
         decision = json.loads(reply).get("decision") if reply.strip() else None
         if decision:
             out = {"hookSpecificOutput": {"hookEventName": "PermissionRequest", "decision": decision}}
+            if agent == "copilot":  # Copilot reads the decision from the top level
+                out = {**decision, **out}
             sys.stdout.write(json.dumps(out))
             sys.stdout.flush()
     s.close()
