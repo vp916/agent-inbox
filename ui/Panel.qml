@@ -302,7 +302,7 @@ Rectangle {
                                 Label { id: name; x: 18; text: row.s.project || "?"; font.bold: true }
                                 Label {
                                     anchors.left: name.right; anchors.leftMargin: 10; anchors.baseline: name.baseline
-                                    text: (row.s.entry || "").replace("claude-", "") + (row.s.subagents ? "  +" + row.s.subagents + " agents" : "")
+                                    text: (row.s.agent && row.s.agent !== "claude" ? row.s.agent + " " : "") + (row.s.entry || "").replace("claude-", "") + (row.s.subagents ? "  +" + row.s.subagents + " agents" : "")
                                           + (row.s.ctx_tokens ? "  ctx " + panel.k(row.s.ctx_tokens) + (row.s.ctx_pct ? " " + row.s.ctx_pct + "%" : "") + " · out " + panel.k(row.s.out_tokens) : "")
                                     color: panel.cDim; font.pixelSize: 11
                                 }

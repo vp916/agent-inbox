@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Codex CLI sessions are shown (watch only): hooks in `~/.codex/hooks.json`.
+
 ## 0.2.0
 
 - Click a session to jump to its terminal window (KWin, Hyprland, Sway; Konsole also switches tab).

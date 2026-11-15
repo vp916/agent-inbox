@@ -21,8 +21,11 @@ def base(p):
 
 def describe(tool, inp):
     inp = inp if isinstance(inp, dict) else {}
-    if tool == "Bash":
-        return "$ " + short(inp.get("command"), 64)
+    if tool in ("Bash", "shell", "local_shell", "exec_command"):
+        cmd = inp.get("command")
+        return "$ " + short(" ".join(map(str, cmd)) if isinstance(cmd, list) else cmd, 64)
+    if tool == "apply_patch":
+        return "Patching files"
     if tool == "Read":
         return "Reading " + base(inp.get("file_path"))
     if tool in ("Edit", "MultiEdit", "NotebookEdit"):
@@ -69,6 +72,7 @@ class Session:
     quiet: bool = False  # user dismissed: ignore reminder notifications until the agent moves on
     pid: int | None = None
     entry: str = ""  # cli, claude-vscode, ...
+    agent: str = "claude"  # claude | codex
     model: str = ""
     subagents: int = 0
     ctx_tokens: int = 0  # size of the context sent with the latest request
@@ -94,6 +98,8 @@ def apply(s: Session, ev: dict, now: float):
         s.pid = ev["_pid"]
     if ev.get("_entry"):
         s.entry = ev["_entry"]
+    if ev.get("_agent"):
+        s.agent = ev["_agent"]
     if ev.get("model"):
         s.model = str(ev["model"])
     proj = ev.get("_project_dir") or ("" if s.cwd else ev.get("cwd"))

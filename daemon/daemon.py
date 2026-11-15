@@ -59,10 +59,11 @@ def load_config():
     return cfg
 
 
-def is_claude(pid):
+def is_agent(pid):
     try:
         with open(f"/proc/{pid}/cmdline", "rb") as f:
-            return b"claude" in f.read()
+            cmd = f.read()
+        return b"claude" in cmd or b"codex" in cmd
     except OSError:
         return False
 
@@ -176,7 +177,7 @@ class Daemon:
             s = self.sessions[sid] = Session(id=sid, since=now)
             self.sessions.pop(f"pid-{ev.get('_pid')}", None)  # it was listed by discover() until now
         kind = apply(s, ev, now)
-        if name in ("Stop", "PostToolUse", "SessionStart") and ev.get("transcript_path"):
+        if s.agent == "claude" and name in ("Stop", "PostToolUse", "SessionStart") and ev.get("transcript_path"):
             self.read_usage(s, ev["transcript_path"], now, force=name != "PostToolUse")
         self.db.execute("insert into events values(?, ?, ?, ?)", (now, sid, name, json.dumps(ev)))
         if self.ui["view"] == "today" and name in ("UserPromptSubmit", "Stop"):
@@ -333,7 +334,7 @@ class Daemon:
             if not focus(s.pid, s.project):
                 return {"type": "error", "error": "no supported compositor found (KWin, Hyprland, Sway)"}
         elif c == "stop":
-            if not (s and s.pid and is_claude(s.pid)):
+            if not (s and s.pid and is_agent(s.pid)):
                 return {"type": "error", "error": "session process not known"}
             os.kill(s.pid, signal.SIGTERM)
         elif c != "status":

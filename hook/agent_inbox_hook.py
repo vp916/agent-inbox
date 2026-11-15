@@ -1,5 +1,7 @@
 #!/usr/bin/python3
-"""Claude Code hook: forward the event to the agent-inbox daemon and exit.
+"""Agent hook (Claude Code, Codex CLI): forward the event to the agent-inbox daemon and exit.
+
+Usage: agent_inbox_hook.py [agent]   agent = claude (default) | codex
 
 Must never slow or block the agent: stdlib only, 1 s socket timeout,
 every error swallowed, always exits 0.
@@ -29,8 +31,8 @@ def trim(v):
     return v
 
 
-def claude_pid():
-    """Nearest ancestor process that is Claude Code itself."""
+def agent_pid(agent):
+    """Nearest ancestor process that is the agent itself."""
     pid = os.getppid()
     for _ in range(8):
         if pid <= 1:
@@ -42,7 +44,7 @@ def claude_pid():
                 ppid = int(f.read().rsplit(")", 1)[1].split()[1])
         except (OSError, ValueError, IndexError):
             break
-        if any(b"claude" in os.path.basename(a) for a in cmd[:2]):
+        if any(agent.encode() in os.path.basename(a) for a in cmd[:2]):
             return pid
         pid = ppid
     return None
@@ -52,14 +54,18 @@ def main():
     ev = json.load(sys.stdin)
     ev.pop("tool_response", None)
     ev = trim(ev)
-    env_pid = os.environ.get("CLAUDE_PID", "")
-    ev["_pid"] = int(env_pid) if env_pid.isdigit() else claude_pid()
+    agent = sys.argv[1] if len(sys.argv) > 1 else "claude"
+    env_pid = os.environ.get("CLAUDE_PID", "") if agent == "claude" else ""
+    ev["_agent"] = agent
+    ev["_pid"] = int(env_pid) if env_pid.isdigit() else agent_pid(agent)
     ev["_entry"] = os.environ.get("CLAUDE_CODE_ENTRYPOINT") or os.environ.get("TERM_PROGRAM") or ""
     ev["_project_dir"] = os.environ.get("CLAUDE_PROJECT_DIR", "")
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     s.settimeout(1)
     s.connect(SOCK)
-    ask = ev.get("hook_event_name") == "PermissionRequest"
+    # Only Claude Code is known to show its own prompt while this hook waits. For other
+    # agents the request is reported and the hook returns at once, so nothing is held up.
+    ask = ev.get("hook_event_name") == "PermissionRequest" and agent == "claude"
     s.sendall((json.dumps({"kind": "ask" if ask else "event", "event": ev}) + "\n").encode())
     if ask:
         s.settimeout(ASK_WAIT)

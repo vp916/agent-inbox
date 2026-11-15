@@ -22,6 +22,8 @@ def test_describe():
     assert describe("WebFetch", {"url": "https://example.com/x"}) == "Fetching example.com"
     assert describe("mcp__easel__chart", {}) == "easel · chart"
     assert describe("Unknown", None) == "Unknown"
+    assert describe("shell", {"command": ["bash", "-lc", "ls"]}) == "$ bash -lc ls"
+    assert describe("apply_patch", {"command": "*** Begin Patch"}) == "Patching files"
 
 
 def test_working_turn():
@@ -100,6 +102,8 @@ def test_misc():
     ])  # fmt: skip
     assert s.recent[-1][1] == "↳ Searching foo" and s.subagents == 0
     assert kinds[3] == "error" and s.ended
+    s, _ = run([(1, ev("UserPromptSubmit", prompt="hi", _agent="codex"))])
+    assert s.agent == "codex"
     s = Session.load({"id": "x", "unknown_field": 1, "project": "p"})
     assert s.project == "p"
 

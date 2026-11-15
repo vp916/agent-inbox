@@ -1,6 +1,6 @@
 # agent-inbox
 
-A floating overlay for Linux that shows what your open Claude Code sessions are doing, pops up when one needs you, and lets you answer without switching windows.
+A floating overlay for Linux that shows what your open Claude Code sessions are doing, pops up when one needs you, and lets you answer without switching windows. Codex CLI sessions are shown too (watch only, see below).
 
 ![demo](docs/demo.gif)
 
@@ -132,6 +132,18 @@ Claude Code hooks -> hook/agent_inbox_hook.py -> unix socket -> daemon/daemon.py
 - **Daemon.** Keeps one state per session (`daemon/state.py`, a small pure state machine), decides what needs attention and when to pop the overlay up, and removes sessions whose process has gone.
 - **Overlay.** A PySide6/QML window placed with layer-shell. `ui/Panel.qml` is the whole look; `ui/Preview.qml` renders it with sample data.
 
+## Codex CLI
+
+If `~/.codex` exists, the installer also adds hooks to `~/.codex/hooks.json`. Codex only runs hooks you have approved: open Codex, type `/hooks` and trust the agent-inbox entries.
+
+Codex sessions then appear like Claude Code ones, marked `codex`: current action, permission and finished cards, the today view, click to jump to the terminal. What is different:
+
+- Permission prompts are shown but answered in the Codex terminal. The approve and deny buttons are Claude Code only for now.
+- No token counts and no plan usage.
+- A Codex session appears at its first event, not before.
+
+This has been tested with simulated events only, not yet with a live Codex session.
+
 ## Plan usage and the status line
 
 Claude Code only exposes plan usage to a status line script, so the installer sets one up: a row at the bottom of each terminal session such as `Fable 5.2 · ctx 34% · 5h 62% · 7d 41%`. The same numbers appear at the bottom of the overlay. They show up after a session's first response, and only on claude.ai subscription plans. If you already have a status line it is left untouched and this feature stays off. To remove ours, delete the `statusLine` entry from `~/.claude/settings.json`.
@@ -144,7 +156,7 @@ Your prompts, tool calls and the agent's last message of each turn are written t
 
 - You can answer a question the agent asked, but you cannot send a new prompt to an idle session from the overlay.
 - Plans can be read in the overlay but must be approved in the terminal; Claude Code does not accept a plan approval from a hook.
-- Claude Code only.
+- Claude Code is fully supported; Codex CLI is watch only. Other agents are not supported.
 
 ## Development
 

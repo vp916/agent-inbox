@@ -22,6 +22,12 @@ UNITS = HOME / ".config/systemd/user"
 DAEMON_UNIT = UNITS / "agent-inbox.service"
 OVERLAY_UNIT = UNITS / "agent-inbox-overlay.service"
 LINK = HOME / ".local/bin/agent-inbox"
+CODEX_HOOKS = HOME / ".codex/hooks.json"
+CODEX_BACKUP = HOME / ".codex/hooks.json.before-agent-inbox"
+CODEX_EVENTS = [
+    "SessionStart", "UserPromptSubmit", "PreToolUse", "PermissionRequest", "PostToolUse",
+    "PreCompact", "SubagentStart", "SubagentStop", "Stop", "SessionEnd",
+]  # fmt: skip
 MARK = "agent_inbox_hook.py"
 STATUS_MARK = "agent_inbox_statusline.py"
 # The system interpreter is the one distro PySide6 packages install into.
@@ -39,11 +45,13 @@ def systemctl(*args):
     return subprocess.run(["systemctl", "--user", *args], capture_output=True).returncode == 0
 
 
-def edit_hooks(add):
-    settings = json.loads(SETTINGS.read_text()) if SETTINGS.exists() else {}
-    if add and SETTINGS.exists() and not BACKUP.exists():
-        shutil.copy2(SETTINGS, BACKUP)
-    hooks = settings.get("hooks", {})
+def edit_hooks(path, backup, events, cmd, add, waits=()):
+    """Add or remove our entries in a Claude Code settings.json or a Codex hooks.json.
+    Both use the same {"hooks": {event: [{"hooks": [...]}]}} layout. Returns the parsed file."""
+    data = json.loads(path.read_text()) if path.exists() else {}
+    if add and path.exists() and not backup.exists():
+        shutil.copy2(path, backup)
+    hooks = data.get("hooks", {})
     for event in list(hooks):  # drop our old entries, keep everyone else's
         hooks[event] = [
             g for g in hooks[event] if not any(MARK in h.get("command", "") for h in g.get("hooks", []))
@@ -51,17 +59,22 @@ def edit_hooks(add):
         if not hooks[event]:
             del hooks[event]
     if add:
-        for event in EVENTS:
-            hook = {"type": "command", "command": CMD, "timeout": 5}
-            if event == "PermissionRequest":  # waits for an answer from the overlay
+        for event in events:
+            hook = {"type": "command", "command": cmd, "timeout": 5}
+            if event in waits:  # waits for an answer from the overlay
                 hook["timeout"] = 330
-            elif event != "SessionEnd":  # the process is exiting; let it finish sending
+            elif event != "SessionEnd" and "async" in waits:  # Claude Code can run hooks in the background
                 hook["async"] = True
             hooks.setdefault(event, []).append({"hooks": [hook]})
     if hooks:
-        settings["hooks"] = hooks
+        data["hooks"] = hooks
     else:
-        settings.pop("hooks", None)
+        data.pop("hooks", None)
+    return data
+
+
+def edit_claude(add):
+    settings = edit_hooks(SETTINGS, BACKUP, EVENTS, CMD, add, waits=("PermissionRequest", "async"))
     # Plan usage only reaches us through the status line. Never replace someone's own.
     line = settings.get("statusLine")
     ours = isinstance(line, dict) and STATUS_MARK in line.get("command", "")
@@ -75,6 +88,18 @@ def edit_hooks(add):
     SETTINGS.parent.mkdir(parents=True, exist_ok=True)
     SETTINGS.write_text(json.dumps(settings, indent=2) + "\n")
     return kept_other
+
+
+def edit_codex(add):
+    """Codex CLI reads ~/.codex/hooks.json. Returns True if Codex is set up on this machine."""
+    if not CODEX_HOOKS.parent.is_dir():
+        return False
+    data = edit_hooks(CODEX_HOOKS, CODEX_BACKUP, CODEX_EVENTS, CMD.replace(" || true", " codex || true"), add)
+    if data:
+        CODEX_HOOKS.write_text(json.dumps(data, indent=2) + "\n")
+    else:
+        CODEX_HOOKS.unlink(missing_ok=True)
+    return True
 
 
 def check():
@@ -132,7 +157,12 @@ def install():
         LINK.unlink(missing_ok=True)
         LINK.symlink_to(ROOT / "bin/agent-inbox")
         command = LINK
-    if edit_hooks(add=True):
+    if edit_codex(add=True):
+        problems.append(
+            "Codex CLI: hooks were added to ~/.codex/hooks.json. Codex only runs hooks you have approved: "
+            "open Codex, type /hooks and trust the agent-inbox entries."
+        )
+    if edit_claude(add=True):
         problems.append(
             "You already have a custom status line, so it was left alone and the plan-usage display is off. "
             f"To turn it on, pipe your status line's input through {ROOT / 'hook' / STATUS_MARK} as well."
@@ -144,7 +174,8 @@ def install():
 
 
 def uninstall():
-    edit_hooks(add=False)
+    edit_claude(add=False)
+    edit_codex(add=False)
     systemctl("disable", "--now", OVERLAY_UNIT.name, DAEMON_UNIT.name)
     DAEMON_UNIT.unlink(missing_ok=True)
     OVERLAY_UNIT.unlink(missing_ok=True)
