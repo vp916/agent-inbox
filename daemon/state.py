@@ -72,7 +72,8 @@ class Session:
     quiet: bool = False  # user dismissed: ignore reminder notifications until the agent moves on
     pid: int | None = None
     entry: str = ""  # cli, claude-vscode, ...
-    agent: str = "claude"  # claude | codex
+    agent: str = "claude"  # claude | codex | copilot | antigravity
+    chain: list = field(default_factory=list)  # pids from the hook upwards, to find its window
     model: str = ""
     subagents: int = 0
     ctx_tokens: int = 0  # size of the context sent with the latest request
@@ -100,6 +101,10 @@ def apply(s: Session, ev: dict, now: float):
         s.entry = ev["_entry"]
     if ev.get("_agent"):
         s.agent = ev["_agent"]
+    if ev.get("_chain"):
+        s.chain = ev["_chain"]
+    if ev.get("_repeat") and s.state == "working" and s.task == short(ev.get("prompt"), 120):
+        return None  # the same prompt reported again mid-turn
     if ev.get("model"):
         s.model = str(ev["model"])
     proj = ev.get("_project_dir") or ("" if s.cwd else ev.get("cwd"))

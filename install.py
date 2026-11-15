@@ -24,6 +24,14 @@ OVERLAY_UNIT = UNITS / "agent-inbox-overlay.service"
 LINK = HOME / ".local/bin/agent-inbox"
 CODEX_HOOKS = HOME / ".codex/hooks.json"
 CODEX_BACKUP = HOME / ".codex/hooks.json.before-agent-inbox"
+COPILOT_HOOKS = HOME / ".copilot/hooks/agent-inbox.json"
+COPILOT_EVENTS = [
+    "SessionStart", "UserPromptSubmit", "PreToolUse", "PermissionRequest", "PostToolUse",
+    "SubagentStop", "Stop", "ErrorOccurred", "SessionEnd",
+]  # fmt: skip
+ANTIGRAVITY_HOOKS = HOME / ".gemini/config/hooks.json"
+# PreToolUse is left out on purpose: Antigravity requires a decision from it for every tool call.
+ANTIGRAVITY_EVENTS = ["SessionStart", "PreInvocation", "PostToolUse", "Stop"]
 CODEX_EVENTS = [
     "SessionStart", "UserPromptSubmit", "PreToolUse", "PermissionRequest", "PostToolUse",
     "PreCompact", "SubagentStart", "SubagentStop", "Stop", "SessionEnd",
@@ -94,11 +102,50 @@ def edit_codex(add):
     """Codex CLI reads ~/.codex/hooks.json. Returns True if Codex is set up on this machine."""
     if not CODEX_HOOKS.parent.is_dir():
         return False
-    data = edit_hooks(CODEX_HOOKS, CODEX_BACKUP, CODEX_EVENTS, CMD.replace(" || true", " codex || true"), add)
+    data = edit_hooks(CODEX_HOOKS, CODEX_BACKUP, CODEX_EVENTS, CMD.replace(" || true", " codex || true"), add,
+                      waits=("PermissionRequest",))
+    for group in data.get("hooks", {}).get("SessionEnd", []):
+        for hook in group["hooks"]:
+            hook["timeout"] = min(hook["timeout"], 3)  # Codex allows at most 3 s here
     if data:
         CODEX_HOOKS.write_text(json.dumps(data, indent=2) + "\n")
     else:
         CODEX_HOOKS.unlink(missing_ok=True)
+    return True
+
+
+def edit_copilot(add):
+    """GitHub Copilot (CLI and the VS Code agent) loads every file in ~/.copilot/hooks/.
+    PascalCase event names make it send Claude-style payloads."""
+    if not COPILOT_HOOKS.parent.parent.is_dir():
+        return False
+    if not add:
+        COPILOT_HOOKS.unlink(missing_ok=True)
+        return True
+    cmd = CMD.replace(" || true", " copilot || true")
+    hooks = {e: [{"type": "command", "bash": cmd, "timeoutSec": 5}] for e in COPILOT_EVENTS}
+    COPILOT_HOOKS.parent.mkdir(exist_ok=True)
+    COPILOT_HOOKS.write_text(json.dumps({"version": 1, "hooks": hooks}, indent=2) + "\n")
+    return True
+
+
+def edit_antigravity(add):
+    """Antigravity reads ~/.gemini/config/hooks.json: {hook name: {event: [{hooks: [...]}]}}.
+    Its payloads do not name the event, so the event is passed as an argument."""
+    if not ANTIGRAVITY_HOOKS.parent.parent.is_dir():
+        return False
+    data = json.loads(ANTIGRAVITY_HOOKS.read_text()) if ANTIGRAVITY_HOOKS.exists() else {}
+    data.pop("agent-inbox", None)
+    if add:
+        data["agent-inbox"] = {
+            e: [{"hooks": [{"type": "command", "command": CMD.replace(" || true", f" antigravity {e} || true"), "timeout": 5}]}]
+            for e in ANTIGRAVITY_EVENTS
+        }
+    if data:
+        ANTIGRAVITY_HOOKS.parent.mkdir(exist_ok=True)
+        ANTIGRAVITY_HOOKS.write_text(json.dumps(data, indent=2) + "\n")
+    else:
+        ANTIGRAVITY_HOOKS.unlink(missing_ok=True)
     return True
 
 
@@ -162,6 +209,9 @@ def install():
             "Codex CLI: hooks were added to ~/.codex/hooks.json. Codex only runs hooks you have approved: "
             "open Codex, type /hooks and trust the agent-inbox entries."
         )
+    others = [name for name, edit in (("GitHub Copilot", edit_copilot), ("Antigravity", edit_antigravity)) if edit(add=True)]
+    if others:
+        print(f"Also added hooks for: {', '.join(others)}")
     if edit_claude(add=True):
         problems.append(
             "You already have a custom status line, so it was left alone and the plan-usage display is off. "
@@ -176,6 +226,8 @@ def install():
 def uninstall():
     edit_claude(add=False)
     edit_codex(add=False)
+    edit_copilot(add=False)
+    edit_antigravity(add=False)
     systemctl("disable", "--now", OVERLAY_UNIT.name, DAEMON_UNIT.name)
     DAEMON_UNIT.unlink(missing_ok=True)
     OVERLAY_UNIT.unlink(missing_ok=True)

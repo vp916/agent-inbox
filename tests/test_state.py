@@ -104,6 +104,10 @@ def test_misc():
     assert kinds[3] == "error" and s.ended
     s, _ = run([(1, ev("UserPromptSubmit", prompt="hi", _agent="codex"))])
     assert s.agent == "codex"
+    again = ev("UserPromptSubmit", prompt="hi", _repeat=True)
+    apply(s, ev("PreToolUse", tool_name="Read", tool_input={}), 2)
+    apply(s, again, 3)
+    assert s.action == "Reading ?" and s.turn_start == 1
     s = Session.load({"id": "x", "unknown_field": 1, "project": "p"})
     assert s.project == "p"
 

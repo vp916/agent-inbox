@@ -53,6 +53,13 @@ Rectangle {
     }
     readonly property var spinner: ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
+    // which agent a session belongs to: a coloured square and its name
+    readonly property var agentColors: ({ claude: "#d97757", codex: "#19c37d", copilot: "#a371f7", antigravity: "#4c8df6" })
+    function badge(s) {
+        const agent = s.agent || "claude"
+        const where = (s.entry || "").replace("claude-", "")
+        return "<font color='" + (agentColors[agent] || cDim) + "'>■ " + agent + "</font>" + (where ? " · " + where : "")
+    }
     function colorOf(kind) {
         return { permission: cAmber, question: cAmber, plan: cAmber, done: cGreen, error: cRed, working: cCyan }[kind] || cDim
     }
@@ -302,7 +309,8 @@ Rectangle {
                                 Label { id: name; x: 18; text: row.s.project || "?"; font.bold: true }
                                 Label {
                                     anchors.left: name.right; anchors.leftMargin: 10; anchors.baseline: name.baseline
-                                    text: (row.s.agent && row.s.agent !== "claude" ? row.s.agent + " " : "") + (row.s.entry || "").replace("claude-", "") + (row.s.subagents ? "  +" + row.s.subagents + " agents" : "")
+                                    textFormat: Text.StyledText
+                            text: panel.badge(row.s) + (row.s.subagents ? "  +" + row.s.subagents + " agents" : "")
                                           + (row.s.ctx_tokens ? "  ctx " + panel.k(row.s.ctx_tokens) + (row.s.ctx_pct ? " " + row.s.ctx_pct + "%" : "") + " · out " + panel.k(row.s.out_tokens) : "")
                                     color: panel.cDim; font.pixelSize: 11
                                 }

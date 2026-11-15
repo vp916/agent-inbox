@@ -1,24 +1,32 @@
 #!/usr/bin/python3
-"""Agent hook (Claude Code, Codex CLI): forward the event to the agent-inbox daemon and exit.
+"""Agent hook: forward one hook event to the agent-inbox daemon and exit.
 
-Usage: agent_inbox_hook.py [agent]   agent = claude (default) | codex
+Usage: agent_inbox_hook.py [agent] [event]
+  agent = claude (default) | codex | copilot | antigravity
+  event = only for agents whose payload does not name the event (antigravity)
 
-Must never slow or block the agent: stdlib only, 1 s socket timeout,
-every error swallowed, always exits 0.
+Every agent's payload is translated here into one common shape (Claude Code's), so the
+daemon does not need to know which agent it is talking to.
 
-PermissionRequest is the one event that waits: the daemon may send back a decision
-made in the overlay. Claude Code shows its own prompt at the same time, so the
-terminal stays usable; the daemon closes the connection once it is answered there.
+Must never slow or block the agent: stdlib only, 1 s socket timeout, every error
+swallowed, always exits 0.
+
+A permission request is the one event that waits: the daemon may send back a decision
+made in the overlay. That is only done for agents known to show their own prompt at the
+same time (ASK_WAIT), so the terminal stays usable; the daemon closes the connection once
+the request is answered there.
 """
 import json
 import os
 import socket
 import sys
-import time
 
 SOCK = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}") + "/agent-inbox.sock"
 MAX_STR = 2000
-ASK_WAIT = 300  # s to wait for an answer from the overlay
+# s to wait for an answer from the overlay, per agent. Claude Code shows its own prompt
+# while the hook waits (verified). Codex is not verified yet, so its wait is kept short:
+# if its prompt turns out to be held back, it appears after this at the latest.
+ASK_WAIT = {"claude": 300, "codex": 60}
 
 
 def trim(v):
@@ -31,44 +39,80 @@ def trim(v):
     return v
 
 
-def agent_pid(agent):
-    """Nearest ancestor process that is the agent itself."""
-    pid = os.getppid()
-    for _ in range(8):
-        if pid <= 1:
-            break
+def ancestors():
+    """[(pid, argv)] from our parent upwards. One of them is the agent, one owns the window."""
+    out, pid = [], os.getppid()
+    while pid > 1 and len(out) < 12:
         try:
             with open(f"/proc/{pid}/cmdline", "rb") as f:
-                cmd = f.read().split(b"\0")
+                argv = f.read().split(b"\0")
             with open(f"/proc/{pid}/stat") as f:
                 ppid = int(f.read().rsplit(")", 1)[1].split()[1])
         except (OSError, ValueError, IndexError):
             break
-        if any(agent.encode() in os.path.basename(a) for a in cmd[:2]):
-            return pid
+        out.append((pid, argv))
         pid = ppid
-    return None
+    return out
+
+
+def normalize(agent, ev, event):
+    """Translate an agent's payload into the common event shape."""
+    if agent == "antigravity":
+        call = ev.get("toolCall") or {}
+        args = call.get("args") if isinstance(call.get("args"), dict) else {}
+        paths = ev.get("workspacePaths") or [""]
+        out = {"session_id": ev.get("conversationId"), "cwd": paths[0], "model": ev.get("modelName")}
+        if event == "PreInvocation":  # fires for every model call of a turn
+            out.update(hook_event_name="UserPromptSubmit", prompt=ev.get("lastUserInput"), _repeat=True)
+        elif event == "PostToolUse":  # reported after the fact; shown as the current action
+            command = args.get("CommandLine") or args.get("command")
+            out.update(hook_event_name="PreToolUse", tool_name="Bash" if command else call.get("name"),
+                       tool_input={"command": command} if command else args)  # fmt: skip
+        elif event == "Stop" and ev.get("error"):
+            out.update(hook_event_name="StopFailure", error=str(ev["error"]))
+        else:
+            out["hook_event_name"] = event
+        return out
+    if ev.get("hook_event_name") == "ErrorOccurred":  # copilot
+        err = ev.get("error")
+        ev.update(hook_event_name="StopFailure", error=err.get("message") if isinstance(err, dict) else str(err))
+    return ev
 
 
 def main():
-    ev = json.load(sys.stdin)
-    ev.pop("tool_response", None)
-    ev = trim(ev)
     agent = sys.argv[1] if len(sys.argv) > 1 else "claude"
-    env_pid = os.environ.get("CLAUDE_PID", "") if agent == "claude" else ""
+    ev = normalize(agent, json.load(sys.stdin), sys.argv[2] if len(sys.argv) > 2 else "")
+    ev.pop("tool_response", None)
+    ev.pop("tool_result", None)
+    ev = trim(ev)
+
+    chain = ancestors()
+    env = os.environ
+    env_pid = env.get("CLAUDE_PID", "") if agent == "claude" else ""
     ev["_agent"] = agent
-    ev["_pid"] = int(env_pid) if env_pid.isdigit() else agent_pid(agent)
-    ev["_entry"] = os.environ.get("CLAUDE_CODE_ENTRYPOINT") or os.environ.get("TERM_PROGRAM") or ""
-    ev["_project_dir"] = os.environ.get("CLAUDE_PROJECT_DIR", "")
+    # the agent's own process (so a session can be stopped and noticed when it exits);
+    # absent for agents that live inside an editor
+    ev["_pid"] = int(env_pid) if env_pid.isdigit() else next(
+        (pid for pid, argv in chain if any(agent.encode() in os.path.basename(a) for a in argv[:2])), None
+    )
+    ev["_chain"] = [pid for pid, _ in chain]  # for bringing its window to the front
+    in_vscode = env.get("TERM_PROGRAM") == "vscode" or any(k.startswith("VSCODE_") for k in env)
+    ev["_entry"] = (
+        (agent == "claude" and env.get("CLAUDE_CODE_ENTRYPOINT"))
+        or ("ide" if agent == "antigravity" else "vscode" if in_vscode else "cli")
+    )
+    ev["_project_dir"] = env.get("CLAUDE_PROJECT_DIR", "")
+
+    if agent == "antigravity":
+        sys.stdout.write("{}")  # "no opinion" for every event we listen to
+        sys.stdout.flush()
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     s.settimeout(1)
     s.connect(SOCK)
-    # Only Claude Code is known to show its own prompt while this hook waits. For other
-    # agents the request is reported and the hook returns at once, so nothing is held up.
-    ask = ev.get("hook_event_name") == "PermissionRequest" and agent == "claude"
+    ask = ev.get("hook_event_name") == "PermissionRequest" and agent in ASK_WAIT
     s.sendall((json.dumps({"kind": "ask" if ask else "event", "event": ev}) + "\n").encode())
     if ask:
-        s.settimeout(ASK_WAIT)
+        s.settimeout(ASK_WAIT[agent])
         reply = s.makefile().readline()
         decision = json.loads(reply).get("decision") if reply.strip() else None
         if decision:

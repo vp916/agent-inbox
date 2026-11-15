@@ -329,9 +329,9 @@ class Daemon:
             s.attention = None
             self.save(s)
         elif c == "focus":
-            if not (s and s.pid):
-                return {"type": "error", "error": "session process not known"}
-            if not focus(s.pid, s.project):
+            if not s:
+                return {"type": "error", "error": "which session?"}
+            if not focus(([s.pid] if s.pid else []) + s.chain, s.project):
                 return {"type": "error", "error": "no supported compositor found (KWin, Hyprland, Sway)"}
         elif c == "stop":
             if not (s and s.pid and is_agent(s.pid)):

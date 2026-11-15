@@ -69,10 +69,13 @@ def kwin(pids, hint):
     return True
 
 
-def focus(pid, hint=""):
-    """Returns False if no supported compositor was found."""
-    pids = ancestors(pid)
-    konsole_tab(pid)
+def focus(pids, hint=""):
+    """pids: the session's process chain, nearest first. Returns False if no supported compositor was found."""
+    pids = [p for p in pids if os.path.exists(f"/proc/{p}")]
+    if not pids:
+        return False
+    pids += [p for p in ancestors(pids[-1]) if p not in pids]
+    konsole_tab(pids[0])
     if kwin(pids, hint):
         return True
     for tool, make in (

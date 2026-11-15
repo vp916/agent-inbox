@@ -1,6 +1,6 @@
 # agent-inbox
 
-A floating overlay for Linux that shows what your open Claude Code sessions are doing, pops up when one needs you, and lets you answer without switching windows. Codex CLI sessions are shown too (watch only, see below).
+A floating overlay for Linux that shows what your open Claude Code sessions are doing, pops up when one needs you, and lets you answer without switching windows. Codex CLI, GitHub Copilot and Antigravity sessions are shown too (see Supported agents).
 
 ![demo](docs/demo.gif)
 
@@ -132,17 +132,32 @@ Claude Code hooks -> hook/agent_inbox_hook.py -> unix socket -> daemon/daemon.py
 - **Daemon.** Keeps one state per session (`daemon/state.py`, a small pure state machine), decides what needs attention and when to pop the overlay up, and removes sessions whose process has gone.
 - **Overlay.** A PySide6/QML window placed with layer-shell. `ui/Panel.qml` is the whole look; `ui/Preview.qml` renders it with sample data.
 
-## Codex CLI
+## Supported agents
 
-If `~/.codex` exists, the installer also adds hooks to `~/.codex/hooks.json`. Codex only runs hooks you have approved: open Codex, type `/hooks` and trust the agent-inbox entries.
+Each card carries a coloured tag naming the agent and where it runs (`■ claude · cli`, `■ codex · cli`, `■ copilot · vscode`).
 
-Codex sessions then appear like Claude Code ones, marked `codex`: current action, permission and finished cards, the today view, click to jump to the terminal. What is different:
+| Agent | Shown in the overlay | Answer from the overlay | State |
+|---|---|---|---|
+| Claude Code (terminal, VS Code extension) | actions, permission, questions, plans, done, errors | approve / deny, options, typed replies | tested |
+| Codex CLI | actions, permission, done | approve / deny (see note) | watching tested on live sessions; answering not yet |
+| GitHub Copilot (CLI and the VS Code agent) | actions, permission, done, errors | no | simulated events only |
+| Antigravity | actions (after each tool call), done | no | simulated events only |
 
-- Permission prompts are shown but answered in the Codex terminal. The approve and deny buttons are Claude Code only for now.
-- No token counts and no plan usage.
-- A Codex session appears at its first event, not before.
+The installer adds hooks for every agent it finds on the machine:
 
-This has been tested with simulated events only, not yet with a live Codex session.
+| Agent | Hooks file |
+|---|---|
+| Claude Code | `~/.claude/settings.json` |
+| Codex CLI | `~/.codex/hooks.json` |
+| GitHub Copilot | `~/.copilot/hooks/agent-inbox.json` |
+| Antigravity | `~/.gemini/config/hooks.json` |
+
+Notes:
+
+- **Codex** only runs hooks you have approved. Open Codex, type `/hooks`, and trust the agent-inbox entries; do this again after an agent-inbox update changes them. Its permission hook waits up to 60 seconds for an answer from the overlay. Whether Codex shows its own prompt during that wait has not been verified.
+- **Copilot and Antigravity** are watch only. Antigravity reports a tool call after it ran, and its permission prompts are not visible to hooks we can safely use.
+- Token counts and plan usage are Claude Code only. Sessions of other agents appear at their first event.
+- The session `stop` button is offered for agents that run as their own process (Claude Code, Codex, Copilot CLI), not for agents inside an editor.
 
 ## Plan usage and the status line
 
@@ -156,7 +171,7 @@ Your prompts, tool calls and the agent's last message of each turn are written t
 
 - You can answer a question the agent asked, but you cannot send a new prompt to an idle session from the overlay.
 - Plans can be read in the overlay but must be approved in the terminal; Claude Code does not accept a plan approval from a hook.
-- Claude Code is fully supported; Codex CLI is watch only. Other agents are not supported.
+- Claude Code is fully supported; other agents to the extent listed under Supported agents.
 
 ## Development
 

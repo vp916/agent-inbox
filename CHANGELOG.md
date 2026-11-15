@@ -2,7 +2,10 @@
 
 ## Unreleased
 
-- Codex CLI sessions are shown (watch only): hooks in `~/.codex/hooks.json`.
+- Codex CLI sessions are shown, with approve / deny from the overlay (hooks in `~/.codex/hooks.json`).
+- GitHub Copilot and Antigravity sessions are shown (watch only).
+- Each card is tagged with its agent and where it runs.
+- The hook script translates every agent's events into one common shape.
 
 ## 0.2.0
 
