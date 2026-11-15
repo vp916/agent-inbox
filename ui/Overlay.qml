@@ -30,6 +30,8 @@ Window {
     Panel {
         id: panel
         sessions: backend.sessions
+        history: backend.history
+        theme: backend.config.theme || "tokyo-night"
         width: backend.config.width || 460
         fontFamily: backend.config.font || ""
         view: backend.view

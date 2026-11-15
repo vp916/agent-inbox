@@ -8,6 +8,8 @@ A floating overlay for Linux that shows what your open Claude Code sessions are 
 - **Works like an inbox.** A session appears when it asks for permission, asks a question, fails, or finishes a long turn. It disappears once you have dealt with it.
 - **Answer from the overlay.** Approve or deny a permission prompt. Answer the agent's questions by picking options or typing your own reply, including multi-part and multi-select questions. The prompt in the terminal keeps working too; whichever you answer first wins.
 - **Token counts.** Each card shows the session's current context size and total output tokens.
+- **Today.** A third tab lists today's turns across all projects: when, how long, how many tool calls, the prompt and how it ended.
+- **Themes.** Tokyo Night, Catppuccin, Gruvbox and Nord.
 - **Stays out of the way.** Sits above other windows, only takes keyboard focus when you click a reply box, hides itself when nothing needs you.
 - **Local only.** One unix socket, no network port, no telemetry.
 
@@ -66,7 +68,7 @@ The overlay stays hidden until something needs you, then appears in a corner of 
 | `done` | a long turn finished | dismiss, or just send the next prompt |
 | `error` | the turn failed | dismiss |
 
-Click a card to jump to that session's terminal window (KDE: also switches to the right Konsole tab; Hyprland and Sway are supported but untested). `more` (shown on hover) expands a card: the prompt you gave and the last few actions. `stop` (shown on hover) ends that session after a confirmation click. The `all` tab lists every open session, including the ones working quietly.
+Click a card to jump to that session's terminal window (KDE: also switches to the right Konsole tab; Hyprland and Sway are supported but untested). `more` (shown on hover) expands a card: the prompt you gave and the last few actions. `stop` (shown on hover) ends that session after a confirmation click. The `all` tab lists every open session, including the ones working quietly. The `today` tab is a history of today's turns.
 
 To keep it quiet while you are already at the terminal, a permission prompt or question only pops the overlay up if it is still unanswered after 4 seconds, and "done" only counts for turns longer than 30 seconds. Both are configurable.
 
@@ -76,7 +78,8 @@ From the terminal:
 agent-inbox status                 list sessions
 agent-inbox watch                  live list
 agent-inbox toggle | show | hide   overlay visibility
-agent-inbox view inbox|all         only sessions that need you, or everything
+agent-inbox view inbox|all|today   sessions that need you, everything, or today's history
+agent-inbox history                today's turns in the terminal
 agent-inbox dismiss [id]           clear "needs you" on one session or all
 agent-inbox approve <id>           approve a permission prompt
 agent-inbox deny <id>              deny it
@@ -100,7 +103,8 @@ Optional. Create `~/.config/agent-inbox/config.json` with any of these keys (def
   "alert_delay": 4,
   "done_min_turn": 30,
   "keep_days": 14,
-  "sound": true
+  "sound": true,
+  "theme": "tokyo-night"
 }
 ```
 
@@ -109,6 +113,7 @@ Optional. Create `~/.config/agent-inbox/config.json` with any of these keys (def
 - `alert_delay`: seconds a permission prompt or question must stay unanswered before the overlay pops up.
 - `done_min_turn`: seconds a turn must run before "finished" counts as needing you.
 - `keep_days`: how long the event log is kept.
+- `theme`: `tokyo-night`, `catppuccin`, `gruvbox` or `nord`.
 - `sound`: play a short sound when the overlay pops up (needs `pw-play` or `paplay` and the freedesktop sound theme).
 
 ## How it works

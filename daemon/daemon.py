@@ -21,7 +21,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import state  # noqa: E402
 from focus import focus  # noqa: E402
-from state import BLOCKED, Session, apply  # noqa: E402
+from state import BLOCKED, Session, apply, base, short  # noqa: E402
 
 SOCK = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}") + "/agent-inbox.sock"
 DATA = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local/share") / "agent-inbox"
@@ -35,6 +35,7 @@ DEFAULTS = {
     "done_min_turn": 30,  # s a turn must run before "finished" counts as needing you
     "keep_days": 14,  # event log retention
     "sound": True,  # play a short sound when the overlay pops up
+    "theme": "tokyo-night",  # tokyo-night | catppuccin | gruvbox | nord
 }
 STALE_HOURS = 6  # drop sessions with unknown pid after this long without events
 LABEL = {
@@ -83,13 +84,53 @@ class Daemon:
         self.subs = {}  # writer -> role
         self.usage = {}  # session id -> {"pos", "out", "ctx", "at"}: transcript reading state
         self.pending = {}  # session id -> {"fut", "ts", "input"}: a hook waiting for an answer
-        self.ui = {"visible": False, "view": "inbox", "auto": False}
+        self.ui = {"visible": False, "view": "inbox", "auto": False}  # view: inbox | all | today
+        self.history = []  # today's turns, only kept fresh while the "today" view is open
 
     # ---- state out
     def snapshot(self):
         ss = sorted(self.sessions.values(), key=lambda s: (s.attention is None, -s.last))
-        look = {k: self.cfg[k] for k in ("position", "margin", "width", "font")}
-        return {"type": "state", "now": time.time(), "ui": self.ui, "config": look, "sessions": [asdict(s) for s in ss]}
+        look = {k: self.cfg[k] for k in ("position", "margin", "width", "font", "theme")}
+        return {
+            "type": "state", "now": time.time(), "ui": self.ui, "config": look,
+            "sessions": [asdict(s) for s in ss],
+            "history": self.history if self.ui["view"] == "today" else [],
+        }  # fmt: skip
+
+    def load_history(self):
+        """Today's turns, newest first: one entry per prompt, closed by the Stop that ended it."""
+        midnight = time.mktime(time.localtime()[:3] + (0, 0, 0, 0, 0, -1))
+        turns, running = [], {}
+        rows = self.db.execute(
+            "select ts, session, name, data from events where ts >= ? "
+            "and name in ('UserPromptSubmit', 'PreToolUse', 'Stop') order by ts",
+            (midnight,),
+        )
+        for ts, sid, name, data in rows:
+            if name == "UserPromptSubmit":
+                ev = json.loads(data)
+                prev = running.get(sid)
+                if prev and not prev["tools"]:
+                    turns.remove(prev)  # replaced before it did anything (queued or corrected prompt)
+                elif prev:
+                    prev["end"], prev["result"] = ts, "(interrupted by the next prompt)"
+                turn = running[sid] = {
+                    "start": ts, "end": None, "session": sid, "tools": 0, "result": "",
+                    "project": base(ev.get("_project_dir") or ev.get("cwd")),
+                    "prompt": short(ev.get("prompt"), 120),
+                }  # fmt: skip
+                turns.append(turn)
+            elif sid in running:
+                if name == "PreToolUse":
+                    running[sid]["tools"] += 1
+                else:
+                    turn = running.pop(sid)
+                    turn["end"] = ts
+                    turn["result"] = short(json.loads(data).get("last_assistant_message"), 200)
+        for turn in running.values():  # no Stop seen: still going, or the session was closed mid-turn
+            s = self.sessions.get(turn["session"])
+            turn["live"] = bool(s and s.state == "working")
+        self.history = turns[::-1][:60]
 
     def broadcast(self):
         line = (json.dumps(self.snapshot()) + "\n").encode()
@@ -133,6 +174,8 @@ class Daemon:
         if name in ("Stop", "PostToolUse", "SessionStart") and ev.get("transcript_path"):
             self.read_usage(s, ev["transcript_path"], now, force=name != "PostToolUse")
         self.db.execute("insert into events values(?, ?, ?, ?)", (now, sid, name, json.dumps(ev)))
+        if self.ui["view"] == "today" and name in ("UserPromptSubmit", "Stop"):
+            self.load_history()
         if s.ended:
             self.drop(s)
         else:
@@ -200,6 +243,8 @@ class Daemon:
             return  # answered or dismissed in the meantime
         if not self.ui["visible"]:
             self.ui.update(visible=True, auto=True)
+        if self.ui["view"] == "today":
+            self.ui["view"] = "inbox"
         self.broadcast()
         if self.cfg["sound"]:
             asyncio.ensure_future(play("dialog-error" if s.attention["kind"] == "error" else "message-new-instant"))
@@ -220,8 +265,13 @@ class Daemon:
             self.ui.update(visible=not self.ui["visible"], auto=False)
         elif c in ("show", "hide"):
             self.ui.update(visible=c == "show", auto=False)
-        elif c == "view" and m.get("view") in ("inbox", "all"):
+        elif c == "view" and m.get("view") in ("inbox", "all", "today"):
             self.ui["view"] = m["view"]
+            if m["view"] == "today":
+                self.load_history()
+        elif c == "history":
+            self.load_history()
+            return {"type": "history", "turns": self.history}
         elif c == "dismiss":
             for x in [s] if s else list(self.sessions.values()):
                 x.attention, x.quiet = None, True

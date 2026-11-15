@@ -40,15 +40,34 @@ Window {
           task: "", recent: [], attention: { kind: "error", text: "API error: rate limit reached", ts: t - 70 } }
     ]
 
-    Row {
+    readonly property var few: mock.filter(s => ["a1", "f6", "b2", "e5"].indexOf(s.id) >= 0)
+    readonly property var turns: [
+        { start: t - 300, end: null, live: true, project: "agent-inbox", tools: 14, prompt: "add a history view to the overlay", result: "" },
+        { start: t - 2400, end: t - 2150, project: "vision-train", tools: 9, prompt: "fix the mAP drop after the augmentation change",
+          result: "Training script fixed. The mAP drop came from a resize applied twice in the val loader." },
+        { start: t - 5200, end: t - 5170, project: "notes-app", tools: 2, prompt: "rename the export button", result: "Renamed in the toolbar and the menu." },
+        { start: t - 9000, end: t - 5400, project: "web-api", tools: 131, prompt: "migrate the auth module to the new session store",
+          result: "Migration done; all 212 tests pass. Two call sites still use the old cookie name behind a flag." }
+    ]
+
+    Column {
         id: stage
         padding: 24; spacing: 24
-        Panel { sessions: win.mock; view: "inbox" }
-        Panel { sessions: win.mock; view: "all"; open: ({ c3: true, h8: true }); picks: ({ g7: [["Tests", "Lint"], ["Staging"]] }) }
-        Column {
+        Row {
             spacing: 24
-            Panel { sessions: win.mock.filter(s => !s.attention); view: "inbox" }
-            Panel { sessions: []; view: "all" }
+            Panel { sessions: win.mock; view: "inbox" }
+            Panel { sessions: win.mock; view: "all"; open: ({ c3: true, h8: true }); picks: ({ g7: [["Tests", "Lint"], ["Staging"]] }) }
+            Column {
+                spacing: 24
+                Panel { sessions: win.mock; view: "today"; history: win.turns }
+                Panel { sessions: win.mock.filter(s => !s.attention); view: "inbox" }
+            }
+        }
+        Row {
+            spacing: 24
+            Panel { sessions: win.few; theme: "catppuccin" }
+            Panel { sessions: win.few; theme: "gruvbox" }
+            Panel { sessions: win.few; theme: "nord" }
         }
     }
 

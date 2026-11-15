@@ -4,7 +4,8 @@
   agent-inbox status              one-shot list of sessions
   agent-inbox watch               live list
   agent-inbox toggle|show|hide    overlay visibility (bind `agent-inbox toggle` to a hotkey)
-  agent-inbox view inbox|all      which sessions the overlay lists
+  agent-inbox view inbox|all|today  what the overlay lists (today = history of today's turns)
+  agent-inbox history             today's turns: when, project, how long, prompt, result
   agent-inbox dismiss [id]        clear "needs you" on one session (id prefix) or all
   agent-inbox approve|deny <id>   answer a permission prompt
   agent-inbox answer <id> <a>...  answer a question: one answer per part, an option (or its prefix) or any text
@@ -82,6 +83,10 @@ def main(a):
         sys.exit(reply["error"])
     if cmd == "status":
         print(render(reply))
+    if cmd == "history":
+        for t in reversed(reply["turns"]):
+            took = ago(time.time() - (t["end"] - t["start"])) if t["end"] else ("running" if t.get("live") else "unfinished")
+            print(f"{time.strftime('%H:%M', time.localtime(t['start']))}  {t['project'][:22]:<22} {took:>10}  {t['tools']:>3} tools  {t['prompt']}")
 
 
 if __name__ == "__main__":
