@@ -1,0 +1,11 @@
+post_install() {
+  echo "Run 'agent-inbox-setup install' as your user to add the Claude Code hooks and start the services."
+}
+
+post_upgrade() {
+  echo "Run 'agent-inbox-setup install' as your user again to restart the services."
+}
+
+pre_remove() {
+  echo "Hooks and user services are per user: run 'agent-inbox-setup uninstall' as your user before removing."
+}

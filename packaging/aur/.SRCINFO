@@ -1,0 +1,20 @@
+pkgbase = agent-inbox
+	pkgdesc = Floating overlay that shows what your Claude Code sessions are doing and lets you answer them
+	pkgver = 0.2.0
+	pkgrel = 1
+	url = https://github.com/vp916/agent-inbox
+	install = agent-inbox.install
+	arch = any
+	license = MIT
+	depends = python
+	depends = pyside6
+	depends = layer-shell-qt
+	depends = qt6-declarative
+	depends = qt6-wayland
+	depends = systemd
+	optdepends = pipewire: alert sound (pw-play)
+	optdepends = sound-theme-freedesktop: alert sound
+	source = agent-inbox-0.2.0.tar.gz::https://github.com/vp916/agent-inbox/archive/refs/tags/v0.2.0.tar.gz
+	sha256sums = a20cd0375a1656d95c16abb4a3380ed94b39adcfa9772a07f5fd1240df22c185
+
+pkgname = agent-inbox

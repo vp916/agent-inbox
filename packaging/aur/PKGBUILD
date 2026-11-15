@@ -1,0 +1,24 @@
+# Maintainer: vp916 <https://github.com/vp916>
+pkgname=agent-inbox
+pkgver=0.2.0
+pkgrel=1
+pkgdesc="Floating overlay that shows what your Claude Code sessions are doing and lets you answer them"
+arch=('any')
+url="https://github.com/vp916/agent-inbox"
+license=('MIT')
+depends=('python' 'pyside6' 'layer-shell-qt' 'qt6-declarative' 'qt6-wayland' 'systemd')
+optdepends=('pipewire: alert sound (pw-play)'
+            'sound-theme-freedesktop: alert sound')
+install=agent-inbox.install
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('a20cd0375a1656d95c16abb4a3380ed94b39adcfa9772a07f5fd1240df22c185')
+
+package() {
+  cd "$pkgname-$pkgver"
+  install -d "$pkgdir/usr/share/$pkgname" "$pkgdir/usr/bin"
+  cp -r bin daemon hook ui install.py "$pkgdir/usr/share/$pkgname/"
+  ln -s "/usr/share/$pkgname/bin/agent-inbox" "$pkgdir/usr/bin/agent-inbox"
+  ln -s "/usr/share/$pkgname/install.py" "$pkgdir/usr/bin/agent-inbox-setup"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+}
