@@ -65,7 +65,7 @@ The overlay stays hidden until something needs you, then appears in a corner of 
 | `done` | a long turn finished | dismiss, or just send the next prompt |
 | `error` | the turn failed | dismiss |
 
-Click a card to expand it: the prompt you gave and the last few actions. `stop` (shown on hover) ends that session after a confirmation click. The `all` tab lists every open session, including the ones working quietly.
+Click a card to jump to that session's terminal window (KDE: also switches to the right Konsole tab; Hyprland and Sway are supported but untested). `more` (shown on hover) expands a card: the prompt you gave and the last few actions. `stop` (shown on hover) ends that session after a confirmation click. The `all` tab lists every open session, including the ones working quietly.
 
 To keep it quiet while you are already at the terminal, a permission prompt or question only pops the overlay up if it is still unanswered after 4 seconds, and "done" only counts for turns longer than 30 seconds. Both are configurable.
 
@@ -80,6 +80,7 @@ agent-inbox dismiss [id]           clear "needs you" on one session or all
 agent-inbox approve <id>           approve a permission prompt
 agent-inbox deny <id>              deny it
 agent-inbox answer <id> <option>   pick an option for a multiple-choice question
+agent-inbox focus <id>             bring that session's terminal to the front
 agent-inbox stop <id>              end a session
 ```
 

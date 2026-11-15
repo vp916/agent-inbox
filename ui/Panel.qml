@@ -177,7 +177,11 @@ Rectangle {
                 Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: panel.cLine
                             visible: row.index < panel.shown.length - 1 }
                 HoverHandler { id: hover; onHoveredChanged: if (!hovered) row.confirmStop = false }
-                MouseArea { anchors.fill: parent; onClicked: panel.toggle(row.s.id) }
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: panel.command("focus", row.s.id, "")   // jump to that terminal
+                }
 
                 Column {
                     id: body
@@ -220,6 +224,11 @@ Rectangle {
                             anchors.right: parent.right
                             spacing: 12
                             visible: hover.hovered || !!row.a
+                            Button {
+                                visible: hover.hovered
+                                text: row.expanded ? "less" : "more"
+                                onClicked: panel.toggle(row.s.id)
+                            }
                             Button {
                                 visible: !!row.a
                                 text: "dismiss"

@@ -19,6 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import state  # noqa: E402
+from focus import focus  # noqa: E402
 from state import BLOCKED, Session, apply  # noqa: E402
 
 SOCK = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}") + "/agent-inbox.sock"
@@ -210,6 +211,11 @@ class Daemon:
             p["fut"].set_result(decision)
             s.attention = None
             self.save(s)
+        elif c == "focus":
+            if not (s and s.pid):
+                return {"type": "error", "error": "session process not known"}
+            if not focus(s.pid, s.project):
+                return {"type": "error", "error": "no supported compositor found (KWin, Hyprland, Sway)"}
         elif c == "stop":
             if not (s and s.pid and is_claude(s.pid)):
                 return {"type": "error", "error": "session process not known"}
