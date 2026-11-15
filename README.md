@@ -72,7 +72,7 @@ The overlay stays hidden until something needs you, then appears in a corner of 
 | `done` | a long turn finished | dismiss, or just send the next prompt |
 | `error` | the turn failed | dismiss |
 
-Click a card to jump to that session's terminal window (KDE: also switches to the right Konsole tab; Hyprland and Sway are supported but untested). `more` (shown on hover) expands a card: the prompt you gave and the last few actions. `stop` (shown on hover) ends that session after a confirmation click. The `all` tab lists every open session, including the ones working quietly. The `today` tab is a history of today's turns.
+`✕` in the header hides the overlay until the next thing needs you; `dismiss` on a card clears that card. Click a card to jump to that session's terminal window (KDE: also switches to the right Konsole tab; Hyprland and Sway are supported but untested). `more` (shown on hover) expands a card: the prompt you gave and the last few actions. `stop` (shown on hover) ends that session after a confirmation click. The `all` tab lists every open session, including the ones working quietly. The `today` tab is a history of today's turns.
 
 To keep it quiet while you are already at the terminal, a permission prompt or question only pops the overlay up if it is still unanswered after 4 seconds, and "done" only counts for turns longer than 30 seconds. Both are configurable.
 

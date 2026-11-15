@@ -235,8 +235,15 @@ Rectangle {
                     }
                 }
             }
-            Label {
+            Button {
+                id: closeButton
                 anchors.right: parent.right; anchors.rightMargin: 14
+                anchors.verticalCenter: parent.verticalCenter
+                text: "✕"; hot: panel.cRed
+                onClicked: panel.command("hide", "", "")   // hides the overlay; cards stay in the inbox
+            }
+            Label {
+                anchors.right: closeButton.left; anchors.rightMargin: 14
                 anchors.verticalCenter: parent.verticalCenter
                 text: panel.needing.length ? panel.needing.length + (panel.needing.length === 1 ? " needs you" : " need you")
                                            : panel.sessions.length + " open"
