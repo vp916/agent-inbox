@@ -30,7 +30,7 @@ COPILOT_EVENTS = [
     "SubagentStop", "Stop", "ErrorOccurred", "SessionEnd",
 ]  # fmt: skip
 ANTIGRAVITY_HOOKS = HOME / ".gemini/config/hooks.json"
-# PreToolUse is left out on purpose: Antigravity requires a decision from it for every tool call.
+# PreToolUse is added only with antigravity_gate: Antigravity requires a decision from it every time.
 ANTIGRAVITY_EVENTS = ["SessionStart", "PreInvocation", "PostToolUse", "Stop"]
 CODEX_EVENTS = [
     "SessionStart", "UserPromptSubmit", "PreToolUse", "PermissionRequest", "PostToolUse",
@@ -140,9 +140,18 @@ def edit_antigravity(add):
         def entry(event):
             hook = {"type": "command", "command": CMD.replace(" || true", f" antigravity {event} || true"), "timeout": 5}
             # tool events are grouped under a matcher; the other events list the hook directly
+            if event == "PreToolUse":
+                return {"matcher": "run_command", "hooks": [{**hook, "timeout": 70}]}
             return {"matcher": "*", "hooks": [hook]} if event == "PostToolUse" else hook
 
-        data["agent-inbox"] = {"enabled": True, **{e: [entry(e)] for e in ANTIGRAVITY_EVENTS}}
+        events = list(ANTIGRAVITY_EVENTS)
+        try:  # a PreToolUse hook must decide every matching call, so it is only added on request
+            gate = json.loads((HOME / ".config/agent-inbox/config.json").read_text()).get("antigravity_gate")
+        except (OSError, ValueError, AttributeError):
+            gate = False
+        if gate:
+            events.append("PreToolUse")
+        data["agent-inbox"] = {"enabled": True, **{e: [entry(e)] for e in events}}
     if data:
         ANTIGRAVITY_HOOKS.parent.mkdir(exist_ok=True)
         ANTIGRAVITY_HOOKS.write_text(json.dumps(data, indent=2) + "\n")

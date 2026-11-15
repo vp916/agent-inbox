@@ -6,7 +6,7 @@
 - GitHub Copilot sessions are shown, with approve / deny from the overlay.
 - `copilot_gate`: approve or deny Copilot's shell commands from the overlay in VS Code, where Copilot sends no permission event.
 - Close button in the overlay header.
-- Antigravity sessions are shown (watch only).
+- Antigravity sessions are shown; `antigravity_gate` adds approve / deny for its shell commands.
 - Each card is tagged with its agent and where it runs.
 - The hook script translates every agent's events into one common shape.
 

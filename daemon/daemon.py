@@ -39,6 +39,8 @@ DEFAULTS = {
     "usage_warn": 80,  # % of the 5-hour or 7-day plan limit that triggers a warning
     "copilot_gate": False,  # offer Copilot's shell commands to the overlay before VS Code asks
     "copilot_wait": 30,  # s the overlay gets to answer such a command
+    "antigravity_gate": False,  # the same for Antigravity's run_command (needs install.py install to apply)
+    "antigravity_wait": 30,
     "theme": "tokyo-night",  # tokyo-night | catppuccin | gruvbox | nord
 }
 STALE_HOURS = 6  # drop sessions with unknown pid after this long without events

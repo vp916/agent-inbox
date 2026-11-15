@@ -20,6 +20,10 @@ Copilot inside VS Code never sends a permission request, only "about to run a to
 copilot_gate on (config), shell commands that are not plainly read-only are therefore
 offered to the overlay first: approve runs the command without VS Code asking, deny blocks
 it, and no answer leaves the decision to VS Code as usual.
+
+Antigravity works the same way with antigravity_gate: its PreToolUse hook (registered for
+run_command only, and only while the gate is on) must always print a decision, so the
+answer is allow, deny, or "ask", which is Antigravity's own prompt.
 """
 import json
 import os
@@ -107,9 +111,13 @@ def normalize(agent, ev, event):
         out = {"session_id": ev.get("conversationId"), "cwd": paths[0], "model": ev.get("modelName")}
         if event == "PreInvocation":  # fires for every model call of a turn
             out.update(hook_event_name="UserPromptSubmit", prompt=ev.get("lastUserInput"), _repeat=True)
-        elif event == "PostToolUse":  # reported after the fact; shown as the current action
+        elif event in ("PreToolUse", "PostToolUse"):
             command = args.get("CommandLine") or args.get("command")
-            out.update(hook_event_name="PreToolUse", tool_name="Bash" if command else call.get("name"),
+            # Without the gate a tool call is only reported after it ran, and is shown as the
+            # current action. With the gate, commands are reported before and after.
+            after = event == "PostToolUse" and command and config().get("antigravity_gate")
+            out.update(hook_event_name="PostToolUse" if after else "PreToolUse",
+                       tool_name="Bash" if command else call.get("name"),
                        tool_input={"command": command} if command else args)  # fmt: skip
         elif event == "Stop" and ev.get("error"):
             out.update(hook_event_name="StopFailure", error=str(ev["error"]))
@@ -150,10 +158,23 @@ def main():
     )
     ev["_project_dir"] = env.get("CLAUDE_PROJECT_DIR", "")
 
-    if agent == "antigravity":
-        sys.stdout.write("{}")  # "no opinion" for every event we listen to
-        sys.stdout.flush()
     name = ev.get("hook_event_name")
+    if agent == "antigravity":
+        gate = len(sys.argv) > 2 and sys.argv[2] == "PreToolUse"
+        reply = {"decision": "ask"} if gate else {}  # "ask" = Antigravity's own prompt
+        try:
+            exchange("event", ev)
+            cfg = config()
+            if gate and cfg.get("antigravity_gate") and not read_only(ev["tool_input"].get("command")):
+                wait = cfg.get("antigravity_wait")
+                decision = exchange("ask", dict(ev, hook_event_name="PermissionRequest"), wait if isinstance(wait, int) else 30)
+                if decision:
+                    reply = {"decision": decision["behavior"],
+                             "reason": decision.get("message") or "Approved by the user in the agent-inbox overlay"}
+        finally:
+            sys.stdout.write(json.dumps(reply))  # Antigravity expects JSON back from every hook
+            sys.stdout.flush()
+        return
     if name == "PermissionRequest" and agent in ASK_WAIT:
         decision = exchange("ask", ev, ASK_WAIT[agent])
         if decision:
