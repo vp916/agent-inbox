@@ -12,17 +12,25 @@ Window {
     color: "transparent"
     flags: Qt.FramelessWindowHint
 
-    LayerShell.Window.scope: "agent-monitor"
+    readonly property string pos: backend.config.position || "top-right"
+    readonly property int gap: backend.config.margin === undefined ? 14 : backend.config.margin
+
+    LayerShell.Window.scope: "agent-inbox"
     LayerShell.Window.layer: LayerShell.Window.LayerOverlay
-    LayerShell.Window.anchors: LayerShell.Window.AnchorTop | LayerShell.Window.AnchorRight
-    LayerShell.Window.margins.top: 14
-    LayerShell.Window.margins.right: 14
+    LayerShell.Window.anchors: (pos.startsWith("bottom") ? LayerShell.Window.AnchorBottom : LayerShell.Window.AnchorTop)
+                               | (pos.endsWith("left") ? LayerShell.Window.AnchorLeft : LayerShell.Window.AnchorRight)
+    LayerShell.Window.margins.top: gap
+    LayerShell.Window.margins.bottom: gap
+    LayerShell.Window.margins.left: gap
+    LayerShell.Window.margins.right: gap
     LayerShell.Window.keyboardInteractivity: LayerShell.Window.KeyboardInteractivityNone
     LayerShell.Window.activateOnShow: false
 
     Panel {
         id: panel
         sessions: backend.sessions
+        width: backend.config.width || 460
+        fontFamily: backend.config.font || ""
         view: backend.view
         opacity: win.visible ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: 140 } }

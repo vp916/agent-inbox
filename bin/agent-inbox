@@ -1,14 +1,14 @@
 #!/usr/bin/python3
-"""amctl: talk to the Agent Monitor daemon.
+"""agent-inbox: talk to the agent-inbox daemon.
 
-  amctl status              one-shot list of sessions
-  amctl watch               live list
-  amctl toggle|show|hide    overlay visibility (bind `amctl toggle` to a hotkey)
-  amctl view inbox|all      which sessions the overlay lists
-  amctl dismiss [id]        clear "needs you" on one session (id prefix) or all
-  amctl approve|deny <id>   answer a permission prompt
-  amctl answer <id> <opt>   pick an option (label prefix) for a multiple-choice question
-  amctl stop <id>           end that Claude Code session
+  agent-inbox status              one-shot list of sessions
+  agent-inbox watch               live list
+  agent-inbox toggle|show|hide    overlay visibility (bind `agent-inbox toggle` to a hotkey)
+  agent-inbox view inbox|all      which sessions the overlay lists
+  agent-inbox dismiss [id]        clear "needs you" on one session (id prefix) or all
+  agent-inbox approve|deny <id>   answer a permission prompt
+  agent-inbox answer <id> <opt>   pick an option (label prefix) for a multiple-choice question
+  agent-inbox stop <id>           end that Claude Code session
 """
 import json
 import os
@@ -17,7 +17,7 @@ import socket
 import sys
 import time
 
-SOCK = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}") + "/agent-monitor.sock"
+SOCK = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}") + "/agent-inbox.sock"
 TTY = sys.stdout.isatty()
 COLOR = {"permission": 33, "question": 33, "plan": 33, "done": 32, "error": 31, "working": 36, "idle": 90}
 GLYPH = {"permission": "▲", "question": "▲", "plan": "▲", "done": "●", "error": "✗", "working": "◐", "idle": "○"}
@@ -28,7 +28,7 @@ def connect(first):
     try:
         s.connect(SOCK)
     except OSError:
-        sys.exit("daemon not running. Start it: systemctl --user start agent-monitor")
+        sys.exit("daemon not running. Start it: systemctl --user start agent-inbox")
     s.sendall((json.dumps(first) + "\n").encode())
     return s
 
@@ -75,7 +75,7 @@ def main(a):
         if len(a) > 2:
             msg["label"] = a[2]
     elif cmd in ("stop", "approve", "deny", "answer"):
-        sys.exit(f"usage: amctl {cmd} <id>")
+        sys.exit(f"usage: agent-inbox {cmd} <id>")
     reply = json.loads(connect(msg).makefile().readline())
     if reply["type"] == "error":
         sys.exit(reply["error"])

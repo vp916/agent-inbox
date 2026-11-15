@@ -1,51 +1,139 @@
 # agent-inbox
 
-A floating overlay for Linux that shows what your open Claude Code sessions are doing and pops up when one needs you.
+A floating overlay for Linux that shows what your open Claude Code sessions are doing, pops up when one needs you, and lets you answer without switching windows.
 
 ![preview](docs/preview.png)
 
-- Follows every Claude Code session on the machine (terminal and VS Code) through Claude Code hooks.
-- Works like an inbox: a session appears when it asks for permission, asks a question, fails, or finishes a long turn, and disappears once you have dealt with it.
-- Answer from the overlay: approve or deny a permission prompt, or pick an option when the agent asks a multiple-choice question. The prompt in the terminal keeps working too; whichever you answer first wins.
-- Stays above other windows without taking keyboard focus.
+- **Sees every session.** Any terminal, any folder, and the VS Code extension, through Claude Code hooks.
+- **Works like an inbox.** A session appears when it asks for permission, asks a question, fails, or finishes a long turn. It disappears once you have dealt with it.
+- **Answer from the overlay.** Approve or deny a permission prompt, or pick an option when the agent asks a multiple-choice question. The prompt in the terminal keeps working too; whichever you answer first wins.
+- **Stays out of the way.** Sits above other windows, never takes keyboard focus, hides itself when nothing needs you.
+- **Local only.** One unix socket, no network port, no telemetry.
 
-Status: early. Tested on KDE Plasma 6 (Wayland) only.
+Status: v0.1, tested on KDE Plasma 6 (Wayland) with Claude Code 2.1.
 
 ## Requirements
 
-- A Wayland compositor with layer-shell support (KDE Plasma 6; Hyprland, Sway and niri are untested). Not GNOME, not X11.
-- Python 3.10+, PySide6, layer-shell-qt, systemd user session.
-- Arch: `sudo pacman -S --needed pyside6 layer-shell-qt`
+- A Wayland compositor with layer-shell support. KDE Plasma 6 is tested. Hyprland, Sway and niri should work but are untested. GNOME and X11 are not supported.
+- Python 3.10+, PySide6, layer-shell-qt, a systemd user session.
+- Claude Code.
+
+Arch / CachyOS:
+
+```
+sudo pacman -S --needed pyside6 layer-shell-qt
+```
+
+Other distributions: install PySide6 (with QtQuick) and layer-shell-qt from your package manager. PySide6 from pip will not work for the overlay, because layer-shell-qt has to match the Qt it runs in.
 
 ## Install
 
 ```
+git clone https://github.com/vp916/agent-inbox.git
+cd agent-inbox
 python3 install.py install
 ```
 
-This adds hook entries to `~/.claude/settings.json` (a backup is made first), two user systemd services, and an `amctl` link in `~/.local/bin`. `python3 install.py uninstall` reverses it.
+This does three things, all reversed by `python3 install.py uninstall`:
 
-Bind `amctl toggle` to a key to show and hide the overlay.
+| Change | Where |
+|---|---|
+| Hook entries (your existing settings are kept, a backup is made first) | `~/.claude/settings.json` |
+| Two user services: daemon and overlay | `~/.config/systemd/user/agent-inbox*.service` |
+| The `agent-inbox` command | `~/.local/bin/agent-inbox` |
 
-## Usage
+The hooks and services point at the cloned folder. If you move it, run install again.
+
+Sessions that are already open pick the hooks up on their own; if one does not show, restart it.
+
+### Hotkey
+
+Bind `agent-inbox toggle` to a key.
+
+- KDE: System Settings → Keyboard → Shortcuts → Add New → Command.
+- Hyprland: `bind = SUPER, A, exec, agent-inbox toggle`
+
+## Using it
+
+The overlay stays hidden until something needs you, then appears in a corner of the screen:
+
+| Card | Meaning | What you can do |
+|---|---|---|
+| `allow?` | waiting on a permission prompt | approve, deny, or answer in the terminal |
+| `asks` | the agent asked a question | pick an option (single-choice questions), or answer in the terminal |
+| `plan` | a plan is ready for review | review it in the terminal |
+| `done` | a long turn finished | dismiss, or just send the next prompt |
+| `error` | the turn failed | dismiss |
+
+Click a card to expand it: the prompt you gave and the last few actions. `stop` (shown on hover) ends that session after a confirmation click. The `all` tab lists every open session, including the ones working quietly.
+
+To keep it quiet while you are already at the terminal, a permission prompt or question only pops the overlay up if it is still unanswered after 4 seconds, and "done" only counts for turns longer than 30 seconds. Both are configurable.
+
+From the terminal:
 
 ```
-amctl status          list sessions
-amctl watch           live list in the terminal
-amctl toggle          show / hide the overlay
-amctl view inbox|all  only sessions that need you, or everything
-amctl dismiss [id]    clear "needs you" on one session or all
-amctl approve <id>    approve a permission prompt (deny: amctl deny <id>)
-amctl answer <id> <option>   pick an option for a multiple-choice question
-amctl stop <id>       end a session
+agent-inbox status                 list sessions
+agent-inbox watch                  live list
+agent-inbox toggle | show | hide   overlay visibility
+agent-inbox view inbox|all         only sessions that need you, or everything
+agent-inbox dismiss [id]           clear "needs you" on one session or all
+agent-inbox approve <id>           approve a permission prompt
+agent-inbox deny <id>              deny it
+agent-inbox answer <id> <option>   pick an option for a multiple-choice question
+agent-inbox stop <id>              end a session
 ```
+
+`<id>` is any unique prefix of the session id shown by `status`.
+
+## Configuration
+
+Optional. Create `~/.config/agent-inbox/config.json` with any of these keys (defaults shown), then `systemctl --user restart agent-inbox`:
+
+```json
+{
+  "position": "top-right",
+  "margin": 14,
+  "width": 460,
+  "font": "",
+  "alert_delay": 4,
+  "done_min_turn": 30,
+  "keep_days": 14
+}
+```
+
+- `position`: `top-right`, `top-left`, `bottom-right` or `bottom-left`.
+- `font`: a font family. Empty picks the first installed one from a built-in list of monospace fonts.
+- `alert_delay`: seconds a permission prompt or question must stay unanswered before the overlay pops up.
+- `done_min_turn`: seconds a turn must run before "finished" counts as needing you.
+- `keep_days`: how long the event log is kept.
 
 ## How it works
 
 ```
-Claude Code hooks -> hook/am_hook.py -> unix socket -> daemon/amd.py -> ui/overlay.py
+Claude Code hooks -> hook/agent_inbox_hook.py -> unix socket -> daemon/daemon.py -> ui/overlay.py
 ```
 
-The hook script forwards each event and exits; it runs in the background and never blocks the agent. The one exception is a permission request: that hook waits for an answer from the overlay while Claude Code shows its own prompt as usual. The daemon keeps one state per session and decides what needs attention. Everything stays on the machine: one unix socket, no network port.
+- **Hook script.** Forwards each hook event to the daemon and exits. It runs in the background, takes about 15 ms, and exits cleanly if the daemon is not running, so it never slows or blocks the agent. The one hook that waits is the permission request: it holds on for an answer from the overlay while Claude Code shows its own prompt as usual.
+- **Daemon.** Keeps one state per session (`daemon/state.py`, a small pure state machine), decides what needs attention and when to pop the overlay up, and removes sessions whose process has gone.
+- **Overlay.** A PySide6/QML window placed with layer-shell. `ui/Panel.qml` is the whole look; `ui/Preview.qml` renders it with sample data.
 
-Prompts and commands are logged to `~/.local/share/agent-monitor/events.db` and pruned after 14 days.
+## Privacy
+
+Your prompts, tool calls and the agent's last message of each turn are written to `~/.local/share/agent-inbox/events.db` on your machine so the overlay can show history and survive restarts. Events older than `keep_days` are deleted. Nothing leaves the machine.
+
+## Limits
+
+- Free-text answers cannot be given from the overlay; it never takes keyboard focus. The card tells you which session is asking.
+- Questions with several parts or multi-select are shown but answered in the terminal. Same for plan approval.
+- Claude Code only.
+
+## Development
+
+```
+python3 tests/test_state.py
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software qml6 ui/Preview.qml -- preview.png
+```
+
+## License
+
+MIT

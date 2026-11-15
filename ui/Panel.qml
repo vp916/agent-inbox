@@ -28,7 +28,15 @@ Rectangle {
     readonly property color cRed: "#f7768e"
     readonly property color cCyan: "#7dcfff"
     readonly property color cPurple: "#bb9af7"
-    readonly property string mono: "JetBrainsMono Nerd Font"
+    property string fontFamily: ""  // empty: first installed family from the list below
+    readonly property string mono: {
+        if (fontFamily) return fontFamily
+        const have = Qt.fontFamilies()
+        for (const f of ["JetBrainsMono Nerd Font", "JetBrains Mono", "Hack", "Fira Code", "Cascadia Code",
+                         "Source Code Pro", "DejaVu Sans Mono", "Liberation Mono"])
+            if (have.indexOf(f) >= 0) return f
+        return "monospace"
+    }
     readonly property var spinner: ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
     function colorOf(kind) {

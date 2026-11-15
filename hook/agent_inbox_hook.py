@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Claude Code hook: forward the event to the Agent Monitor daemon and exit.
+"""Claude Code hook: forward the event to the agent-inbox daemon and exit.
 
 Must never slow or block the agent: stdlib only, 1 s socket timeout,
 every error swallowed, always exits 0.
@@ -14,7 +14,7 @@ import socket
 import sys
 import time
 
-SOCK = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}") + "/agent-monitor.sock"
+SOCK = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}") + "/agent-inbox.sock"
 MAX_STR = 2000
 ASK_WAIT = 300  # s to wait for an answer from the overlay
 

@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Agent Monitor daemon: receives hook events, tracks sessions, serves the overlay and amctl.
+"""agent-inbox daemon: receives hook events, tracks sessions, serves the overlay and agent-inbox.
 
 One unix socket, newline-delimited JSON. The first line of a connection sets its role:
   {"kind":"event","event":{...}}         from the hook script
@@ -18,12 +18,21 @@ from dataclasses import asdict
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import state  # noqa: E402
 from state import BLOCKED, Session, apply  # noqa: E402
 
-SOCK = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}") + "/agent-monitor.sock"
-DATA = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local/share") / "agent-monitor"
-ALERT_DELAY = 4  # s a permission/question must stay unanswered before the overlay pops up
-KEEP_DAYS = 14  # event log retention
+SOCK = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}") + "/agent-inbox.sock"
+DATA = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local/share") / "agent-inbox"
+CONFIG = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "agent-inbox/config.json"
+DEFAULTS = {
+    "position": "top-right",  # top-right | top-left | bottom-right | bottom-left
+    "margin": 14,  # px from the screen edges
+    "width": 460,  # px
+    "font": "",  # font family; empty picks the first installed monospace from a built-in list
+    "alert_delay": 4,  # s a permission/question must stay unanswered before the overlay pops up
+    "done_min_turn": 30,  # s a turn must run before "finished" counts as needing you
+    "keep_days": 14,  # event log retention
+}
 STALE_HOURS = 6  # drop sessions with unknown pid after this long without events
 LABEL = {
     "permission": "needs permission",
@@ -32,6 +41,16 @@ LABEL = {
     "done": "finished",
     "error": "stopped on an error",
 }
+
+
+def load_config():
+    cfg = dict(DEFAULTS)
+    try:
+        user = json.loads(CONFIG.read_text())
+        cfg.update({k: v for k, v in user.items() if k in DEFAULTS and type(v) is type(DEFAULTS[k])})
+    except (OSError, ValueError, AttributeError):
+        pass
+    return cfg
 
 
 def is_claude(pid):
@@ -45,13 +64,15 @@ def is_claude(pid):
 class Daemon:
     def __init__(self):
         DATA.mkdir(parents=True, exist_ok=True)
+        self.cfg = load_config()
+        state.DONE_MIN_TURN = self.cfg["done_min_turn"]
         self.db = sqlite3.connect(DATA / "events.db", isolation_level=None)
         self.db.executescript(
             """create table if not exists events(ts real, session text, name text, data text);
                create index if not exists events_session on events(session, ts);
                create table if not exists sessions(id text primary key, data text);"""
         )
-        self.db.execute("delete from events where ts < ?", (time.time() - KEEP_DAYS * 86400,))
+        self.db.execute("delete from events where ts < ?", (time.time() - self.cfg["keep_days"] * 86400,))
         self.sessions = {}
         for (data,) in self.db.execute("select data from sessions"):
             s = Session.load(json.loads(data))
@@ -63,7 +84,8 @@ class Daemon:
     # ---- state out
     def snapshot(self):
         ss = sorted(self.sessions.values(), key=lambda s: (s.attention is None, -s.last))
-        return {"type": "state", "now": time.time(), "ui": self.ui, "sessions": [asdict(s) for s in ss]}
+        look = {k: self.cfg[k] for k in ("position", "margin", "width", "font")}
+        return {"type": "state", "now": time.time(), "ui": self.ui, "config": look, "sessions": [asdict(s) for s in ss]}
 
     def broadcast(self):
         line = (json.dumps(self.snapshot()) + "\n").encode()
@@ -109,7 +131,7 @@ class Daemon:
         else:
             self.save(s)
             if kind:
-                delay = ALERT_DELAY if kind in BLOCKED else 0
+                delay = self.cfg["alert_delay"] if kind in BLOCKED else 0
                 asyncio.get_running_loop().call_later(delay, self.alert, sid, s.attention["ts"])
         self.settle()
         self.broadcast()
@@ -239,7 +261,7 @@ class Daemon:
 
 async def notify(title, body):
     try:
-        await asyncio.create_subprocess_exec("notify-send", "-a", "Agent Monitor", title, body)
+        await asyncio.create_subprocess_exec("notify-send", "-a", "agent-inbox", title, body)
     except OSError:
         pass
 
@@ -249,7 +271,7 @@ async def main():
     try:
         _, w = await asyncio.open_unix_connection(SOCK)
         w.close()
-        sys.exit("agent-monitor daemon already running")
+        sys.exit("agent-inbox daemon already running")
     except OSError:
         if os.path.exists(SOCK):
             os.unlink(SOCK)

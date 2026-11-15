@@ -21,7 +21,7 @@ Window {
           task: "fix the mAP drop after the augmentation change", recent: [],
           attention: { kind: "done", text: "Training script fixed. The mAP drop came from a <resize> applied twice in the val loader; removed the second one and re-ran eval.", ts: t - 250 } },
         { id: "c3", project: "agent-inbox", entry: "cli", state: "working", action: "Editing state.py", since: t - 3, pid: 3, subagents: 2,
-          task: "build the agent monitor overlay",
+          task: "build the overlay",
           recent: [[t - 40, "Reading PLAN.md"], [t - 31, "$ python3 tests/test_state.py"], [t - 9, "↳ Searching layershell"], [t - 3, "Editing state.py"]],
           attention: null },
         { id: "d4", project: "notes-app", entry: "cli", state: "idle", action: "Finished", since: t - 4000, pid: 4, subagents: 0,
