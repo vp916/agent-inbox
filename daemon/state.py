@@ -64,13 +64,15 @@ class Session:
     task: str = ""  # current prompt, shortened
     turn_start: float = 0
     recent: list = field(default_factory=list)  # [[ts, text], ...] newest last
-    # {"kind", "text", "ts", "call"?, "options"?, "answerable"?}
+    # {"kind", "text", "ts", "call"?, "questions"?, "detail"?, "answerable"?}
     attention: dict | None = None
     quiet: bool = False  # user dismissed: ignore reminder notifications until the agent moves on
     pid: int | None = None
     entry: str = ""  # cli, claude-vscode, ...
     model: str = ""
     subagents: int = 0
+    ctx_tokens: int = 0  # size of the context sent with the latest request
+    out_tokens: int = 0  # output tokens over the whole session
     ended: bool = False
 
     @classmethod
@@ -112,12 +114,17 @@ def apply(s: Session, ev: dict, now: float):
             return
         if tool == "AskUserQuestion":
             qs = inp.get("questions") or [{}]
-            extra = {}
-            if len(qs) == 1 and not qs[0].get("multiSelect"):
-                extra["options"] = [short(o.get("label"), 40) for o in qs[0].get("options") or []]
-            attend("question", qs[0].get("question"), call=call, **extra)
+            questions = [
+                {
+                    "q": short(q.get("question"), 200),
+                    "options": [short(o.get("label"), 40) for o in q.get("options") or []],
+                    "multi": bool(q.get("multiSelect")),
+                }
+                for q in qs
+            ]
+            attend("question", qs[0].get("question"), call=call, questions=questions)
         elif tool == "ExitPlanMode":
-            attend("plan", call, call=call)
+            attend("plan", call, call=call, detail=str(inp.get("plan") or "")[:1500])
         elif name == "PermissionRequest":
             attend("permission", call, call=call)
         else:

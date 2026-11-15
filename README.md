@@ -6,8 +6,9 @@ A floating overlay for Linux that shows what your open Claude Code sessions are 
 
 - **Sees every session.** Any terminal, any folder, and the VS Code extension, through Claude Code hooks.
 - **Works like an inbox.** A session appears when it asks for permission, asks a question, fails, or finishes a long turn. It disappears once you have dealt with it.
-- **Answer from the overlay.** Approve or deny a permission prompt, or pick an option when the agent asks a multiple-choice question. The prompt in the terminal keeps working too; whichever you answer first wins.
-- **Stays out of the way.** Sits above other windows, never takes keyboard focus, hides itself when nothing needs you.
+- **Answer from the overlay.** Approve or deny a permission prompt. Answer the agent's questions by picking options or typing your own reply, including multi-part and multi-select questions. The prompt in the terminal keeps working too; whichever you answer first wins.
+- **Token counts.** Each card shows the session's current context size and total output tokens.
+- **Stays out of the way.** Sits above other windows, only takes keyboard focus when you click a reply box, hides itself when nothing needs you.
 - **Local only.** One unix socket, no network port, no telemetry.
 
 Status: v0.1, tested on KDE Plasma 6 (Wayland) with Claude Code 2.1.
@@ -60,8 +61,8 @@ The overlay stays hidden until something needs you, then appears in a corner of 
 | Card | Meaning | What you can do |
 |---|---|---|
 | `allow?` | waiting on a permission prompt | approve, deny, or answer in the terminal |
-| `asks` | the agent asked a question | pick an option (single-choice questions), or answer in the terminal |
-| `plan` | a plan is ready for review | review it in the terminal |
+| `asks` | the agent asked a question | pick options or type a reply, or answer in the terminal |
+| `plan` | a plan is ready for review | read it under `more`; approve it in the terminal (click the card to jump there) |
 | `done` | a long turn finished | dismiss, or just send the next prompt |
 | `error` | the turn failed | dismiss |
 
@@ -79,7 +80,7 @@ agent-inbox view inbox|all         only sessions that need you, or everything
 agent-inbox dismiss [id]           clear "needs you" on one session or all
 agent-inbox approve <id>           approve a permission prompt
 agent-inbox deny <id>              deny it
-agent-inbox answer <id> <option>   pick an option for a multiple-choice question
+agent-inbox answer <id> <a>...     answer a question: one answer per part (an option or any text)
 agent-inbox focus <id>             bring that session's terminal to the front
 agent-inbox stop <id>              end a session
 ```
@@ -98,7 +99,8 @@ Optional. Create `~/.config/agent-inbox/config.json` with any of these keys (def
   "font": "",
   "alert_delay": 4,
   "done_min_turn": 30,
-  "keep_days": 14
+  "keep_days": 14,
+  "sound": true
 }
 ```
 
@@ -107,6 +109,7 @@ Optional. Create `~/.config/agent-inbox/config.json` with any of these keys (def
 - `alert_delay`: seconds a permission prompt or question must stay unanswered before the overlay pops up.
 - `done_min_turn`: seconds a turn must run before "finished" counts as needing you.
 - `keep_days`: how long the event log is kept.
+- `sound`: play a short sound when the overlay pops up (needs `pw-play` or `paplay` and the freedesktop sound theme).
 
 ## How it works
 
@@ -124,8 +127,8 @@ Your prompts, tool calls and the agent's last message of each turn are written t
 
 ## Limits
 
-- Free-text answers cannot be given from the overlay; it never takes keyboard focus. The card tells you which session is asking.
-- Questions with several parts or multi-select are shown but answered in the terminal. Same for plan approval.
+- You can answer a question the agent asked, but you cannot send a new prompt to an idle session from the overlay.
+- Plans can be read in the overlay but must be approved in the terminal; Claude Code does not accept a plan approval from a hook.
 - Claude Code only.
 
 ## Development

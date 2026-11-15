@@ -55,6 +55,43 @@ Rectangle {
     }
     function clock(t) { return new Date(t * 1000).toTimeString().slice(0, 8) }
     function esc(t) { return String(t || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") }
+    function k(n) { return n >= 1000 ? Math.round(n / 1000) + "k" : String(n) }
+
+    // answers being put together for multi-part questions:
+    // session id -> one entry per question, a list of picked labels or a typed string
+    property var picks: ({})
+    function picked(sid, i) {
+        const v = (picks[sid] || [])[i]
+        return Array.isArray(v) ? v : []
+    }
+    function answerOf(sid, i) {
+        const v = (picks[sid] || [])[i]
+        return Array.isArray(v) ? v.join(", ") : (v || "")
+    }
+    function setPick(sid, i, v) {
+        const all = Object.assign({}, picks)
+        const mine = (all[sid] || []).slice()
+        mine[i] = v
+        all[sid] = mine
+        picks = all
+    }
+    function pick(row, i, label, multi) {
+        if (row.direct) { command("answer", row.s.id, JSON.stringify([label])); return }
+        const cur = picked(row.s.id, i)
+        setPick(row.s.id, i, !multi ? [label]
+                              : cur.indexOf(label) >= 0 ? cur.filter(x => x !== label) : cur.concat([label]))
+    }
+    function complete(row) {
+        return row.asking && row.a.questions.every((q, i) => answerOf(row.s.id, i) !== "")
+    }
+    function submit(row) {
+        if (!complete(row)) return
+        command("answer", row.s.id, JSON.stringify(row.a.questions.map((q, i) => answerOf(row.s.id, i))))
+        const all = Object.assign({}, picks)
+        delete all[row.s.id]
+        picks = all
+    }
+
     function toggle(id) {
         const o = Object.assign({}, open)
         o[id] = !o[id]
@@ -98,11 +135,12 @@ Rectangle {
         id: chip
         property alias text: chipLabel.text
         property color tint: panel.cAccent
+        property bool on: false
         signal clicked()
         width: chipLabel.implicitWidth + 18; height: 24
-        color: chipArea.containsMouse ? Qt.alpha(tint, 0.18) : "transparent"
+        color: on ? Qt.alpha(tint, 0.3) : chipArea.containsMouse ? Qt.alpha(tint, 0.18) : "transparent"
         border.width: 1
-        border.color: chipArea.containsMouse ? tint : panel.cLine
+        border.color: on || chipArea.containsMouse ? tint : panel.cLine
         Label { id: chipLabel; anchors.centerIn: parent; color: chip.tint }
         MouseArea {
             id: chipArea
@@ -110,6 +148,33 @@ Rectangle {
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
             onClicked: chip.clicked()
+        }
+    }
+
+    component Field: Rectangle {
+        id: field
+        property string placeholder: ""
+        signal edited(string text)
+        signal accepted(string text)
+        width: 150; height: 24
+        color: "transparent"
+        border.width: 1
+        border.color: input.activeFocus ? panel.cAccent : panel.cLine
+        TextInput {
+            id: input
+            anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8
+            verticalAlignment: TextInput.AlignVCenter
+            font.family: panel.mono; font.pixelSize: 13
+            color: panel.cFg; selectionColor: panel.cAccent
+            clip: true; selectByMouse: true
+            onTextEdited: field.edited(text)
+            onAccepted: field.accepted(text)
+        }
+        Label {
+            anchors.fill: input
+            verticalAlignment: Text.AlignVCenter
+            visible: !input.text && !input.activeFocus
+            text: field.placeholder; color: panel.cDim
         }
     }
 
@@ -168,6 +233,9 @@ Rectangle {
                 readonly property string kind: a ? a.kind : (s.state || "idle")
                 readonly property bool expanded: !!panel.open[s.id]
                 property bool confirmStop: false
+                readonly property bool asking: !!(a && a.answerable && a.questions && a.questions.length)
+                // one single-choice question: a click or Enter answers straight away
+                readonly property bool direct: asking && a.questions.length === 1 && !a.questions[0].multi
 
                 width: content.width
                 height: body.implicitHeight + 18
@@ -196,6 +264,7 @@ Rectangle {
                         Label {
                             anchors.left: name.right; anchors.leftMargin: 10; anchors.baseline: name.baseline
                             text: (row.s.entry || "").replace("claude-", "") + (row.s.subagents ? "  +" + row.s.subagents + " agents" : "")
+                                  + (row.s.ctx_tokens ? "  ctx " + panel.k(row.s.ctx_tokens) + " · out " + panel.k(row.s.out_tokens) : "")
                             color: panel.cDim; font.pixelSize: 11
                         }
                         Label {
@@ -248,26 +317,64 @@ Rectangle {
                     }
 
                     Flow {
-                        visible: !!(row.a && row.a.answerable) && (row.kind === "permission" || !!row.a.options)
+                        visible: !!(row.a && row.a.answerable) && row.kind === "permission"
                         x: 18; width: parent.width - 18
                         topPadding: 3; spacing: 8
                         Chip {
-                            visible: row.kind === "permission"
                             text: "approve"; tint: panel.cGreen
                             onClicked: panel.command("approve", row.s.id, "")
                         }
                         Chip {
-                            visible: row.kind === "permission"
                             text: "deny"; tint: panel.cRed
                             onClicked: panel.command("deny", row.s.id, "")
                         }
+                    }
+
+                    Column {
+                        visible: row.asking
+                        x: 18; width: parent.width - 18
+                        topPadding: 3; spacing: 8
                         Repeater {
-                            model: row.kind === "question" && row.a && row.a.options ? row.a.options : []
-                            Chip {
-                                required property string modelData
-                                text: modelData
-                                onClicked: panel.command("answer", row.s.id, modelData)
+                            model: row.asking ? row.a.questions : []
+                            Column {
+                                id: part
+                                required property var modelData
+                                required property int index
+                                width: parent.width; spacing: 5
+                                Label {
+                                    visible: !row.direct
+                                    width: parent.width; wrapMode: Text.Wrap
+                                    color: panel.cSoft
+                                    text: part.modelData.q + (part.modelData.multi ? "  (pick any)" : "")
+                                }
+                                Flow {
+                                    width: parent.width; spacing: 8
+                                    Repeater {
+                                        model: part.modelData.options
+                                        Chip {
+                                            required property string modelData
+                                            text: modelData
+                                            on: panel.picked(row.s.id, part.index).indexOf(modelData) >= 0
+                                            onClicked: panel.pick(row, part.index, modelData, part.modelData.multi)
+                                        }
+                                    }
+                                    Field {
+                                        placeholder: "or type…"
+                                        onEdited: text => { if (!row.direct) panel.setPick(row.s.id, part.index, text.trim()) }
+                                        onAccepted: text => {
+                                            if (!text.trim()) return
+                                            if (row.direct) panel.command("answer", row.s.id, JSON.stringify([text.trim()]))
+                                            else panel.submit(row)
+                                        }
+                                    }
+                                }
                             }
+                        }
+                        Chip {
+                            visible: !row.direct
+                            text: "send"; tint: panel.cGreen
+                            opacity: panel.complete(row) ? 1 : 0.35
+                            onClicked: panel.submit(row)
                         }
                     }
 
@@ -275,6 +382,14 @@ Rectangle {
                         visible: row.expanded
                         x: 18; width: parent.width - 18
                         topPadding: 4; spacing: 2
+                        Label {
+                            visible: !!(row.a && row.a.detail)
+                            width: parent.width; wrapMode: Text.Wrap
+                            maximumLineCount: 16; elide: Text.ElideRight
+                            textFormat: Text.PlainText
+                            color: panel.cSoft; font.pixelSize: 12
+                            text: row.a && row.a.detail ? row.a.detail : ""
+                        }
                         Label {
                             visible: !!row.s.task
                             width: parent.width; elide: Text.ElideRight

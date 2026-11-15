@@ -23,7 +23,8 @@ Window {
     LayerShell.Window.margins.bottom: gap
     LayerShell.Window.margins.left: gap
     LayerShell.Window.margins.right: gap
-    LayerShell.Window.keyboardInteractivity: LayerShell.Window.KeyboardInteractivityNone
+    // focus only when the user clicks into a reply box
+    LayerShell.Window.keyboardInteractivity: LayerShell.Window.KeyboardInteractivityOnDemand
     LayerShell.Window.activateOnShow: false
 
     Panel {

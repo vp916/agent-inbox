@@ -7,7 +7,7 @@
   agent-inbox view inbox|all      which sessions the overlay lists
   agent-inbox dismiss [id]        clear "needs you" on one session (id prefix) or all
   agent-inbox approve|deny <id>   answer a permission prompt
-  agent-inbox answer <id> <opt>   pick an option (label prefix) for a multiple-choice question
+  agent-inbox answer <id> <a>...  answer a question: one answer per part, an option (or its prefix) or any text
   agent-inbox focus <id>          bring that session's terminal window to the front
   agent-inbox stop <id>           end that Claude Code session
 """
@@ -74,7 +74,7 @@ def main(a):
     elif len(a) > 1:
         msg["session"] = a[1]
         if len(a) > 2:
-            msg["label"] = a[2]
+            msg["answers"] = a[2:]
     elif cmd in ("stop", "focus", "approve", "deny", "answer"):
         sys.exit(f"usage: agent-inbox {cmd} <id>")
     reply = json.loads(connect(msg).makefile().readline())

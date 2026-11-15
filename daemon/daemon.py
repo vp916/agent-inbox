@@ -10,6 +10,7 @@ One unix socket, newline-delimited JSON. The first line of a connection sets its
 import asyncio
 import json
 import os
+import shutil
 import signal
 import sqlite3
 import sys
@@ -33,6 +34,7 @@ DEFAULTS = {
     "alert_delay": 4,  # s a permission/question must stay unanswered before the overlay pops up
     "done_min_turn": 30,  # s a turn must run before "finished" counts as needing you
     "keep_days": 14,  # event log retention
+    "sound": True,  # play a short sound when the overlay pops up
 }
 STALE_HOURS = 6  # drop sessions with unknown pid after this long without events
 LABEL = {
@@ -79,6 +81,7 @@ class Daemon:
             s = Session.load(json.loads(data))
             self.sessions[s.id] = s
         self.subs = {}  # writer -> role
+        self.usage = {}  # session id -> {"pos", "out", "ctx", "at"}: transcript reading state
         self.pending = {}  # session id -> {"fut", "ts", "input"}: a hook waiting for an answer
         self.ui = {"visible": False, "view": "inbox", "auto": False}
 
@@ -127,6 +130,8 @@ class Daemon:
             s = self.sessions[sid] = Session(id=sid, since=now)
             self.sessions.pop(f"pid-{ev.get('_pid')}", None)  # it was listed by discover() until now
         kind = apply(s, ev, now)
+        if name in ("Stop", "PostToolUse", "SessionStart") and ev.get("transcript_path"):
+            self.read_usage(s, ev["transcript_path"], now, force=name != "PostToolUse")
         self.db.execute("insert into events values(?, ?, ?, ?)", (now, sid, name, json.dumps(ev)))
         if s.ended:
             self.drop(s)
@@ -137,6 +142,32 @@ class Daemon:
                 asyncio.get_running_loop().call_later(delay, self.alert, sid, s.attention["ts"])
         self.settle()
         self.broadcast()
+
+    def read_usage(self, s, path, now, force):
+        """Token counts from the session transcript, read incrementally."""
+        u = self.usage.setdefault(s.id, {"pos": 0, "out": {}, "ctx": 0, "at": 0})
+        if not force and now - u["at"] < 3:
+            return
+        u["at"] = now
+        try:
+            with open(path, "rb") as f:
+                f.seek(u["pos"])
+                for line in f:
+                    if not line.endswith(b"\n"):
+                        break  # still being written
+                    u["pos"] += len(line)
+                    if b'"usage"' not in line:
+                        continue
+                    o = json.loads(line)
+                    m = o.get("message") or {}
+                    use = m.get("usage")
+                    if o.get("type") != "assistant" or o.get("isSidechain") or not isinstance(use, dict):
+                        continue
+                    u["out"][m.get("id")] = use.get("output_tokens") or 0  # one message can span several lines
+                    u["ctx"] = sum(use.get(k) or 0 for k in ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
+        except (OSError, ValueError):
+            return
+        s.ctx_tokens, s.out_tokens = u["ctx"], sum(u["out"].values())
 
     async def ask(self, ev, r, w):
         """A PermissionRequest hook is waiting. Hold it until the overlay answers, the
@@ -170,6 +201,8 @@ class Daemon:
         if not self.ui["visible"]:
             self.ui.update(visible=True, auto=True)
         self.broadcast()
+        if self.cfg["sound"]:
+            asyncio.ensure_future(play("dialog-error" if s.attention["kind"] == "error" else "message-new-instant"))
         if "overlay" not in self.subs.values():
             asyncio.ensure_future(notify(f"{s.project}: {LABEL[s.attention['kind']]}", s.attention["text"]))
 
@@ -202,12 +235,17 @@ class Daemon:
             elif c == "approve":
                 decision = {"behavior": "allow"}
             else:
-                q = (p["input"].get("questions") or [{}])[0]
-                want = (m.get("label") or "\0").rstrip("…")  # the overlay may send a shortened label
-                label = next((o["label"] for o in q.get("options") or [] if o.get("label", "").startswith(want)), None)
-                if label is None:
-                    return {"type": "error", "error": "no such option"}
-                decision = {"behavior": "allow", "updatedInput": {**p["input"], "answers": {q["question"]: label}}}
+                qs = p["input"].get("questions") or []
+                given = m.get("answers") or []
+                if len(given) != len(qs) or not all(isinstance(a, str) and a.strip() for a in given):
+                    return {"type": "error", "error": f"need one answer for each of the {len(qs)} question(s)"}
+                answers = {}
+                for q, a in zip(qs, given):
+                    a = a.strip()
+                    # an option label, possibly shortened or just a prefix; anything else is free text
+                    full = [o["label"] for o in q.get("options") or [] if o.get("label", "").startswith(a.rstrip("…"))]
+                    answers[q["question"]] = full[0] if len(full) == 1 else a
+                decision = {"behavior": "allow", "updatedInput": {**p["input"], "answers": answers}}
             p["fut"].set_result(decision)
             s.attention = None
             self.save(s)
@@ -290,6 +328,16 @@ class Daemon:
             if self.discover() or gone:
                 self.settle()
                 self.broadcast()
+
+
+async def play(name):
+    path = f"/usr/share/sounds/freedesktop/stereo/{name}.oga"
+    tool = shutil.which("pw-play") or shutil.which("paplay")
+    if tool and os.path.exists(path):
+        try:
+            await asyncio.create_subprocess_exec(tool, path)
+        except OSError:
+            pass
 
 
 async def notify(title, body):

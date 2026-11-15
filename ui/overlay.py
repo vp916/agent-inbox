@@ -69,7 +69,10 @@ class Backend(QObject):
 
     @Slot(str, str, str)
     def send(self, cmd, session, label):
-        self._write({"cmd": cmd, "session": session, "label": label})
+        msg = {"cmd": cmd, "session": session}
+        if cmd == "answer":
+            msg["answers"] = json.loads(label)  # a JSON list, one answer per question
+        self._write(msg)
 
     @Slot(str)
     def setView(self, view):

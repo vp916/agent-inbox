@@ -54,12 +54,14 @@ def test_question_and_plan():
     q = {"questions": [{"question": "Which framework?", "options": [{"label": "React"}, {"label": "Vue"}]}]}
     s, kinds = run([(1, ev("PreToolUse", tool_name="AskUserQuestion", tool_input=q))])
     assert kinds == ["question"] and s.attention["text"] == "Which framework?"
-    assert s.attention["options"] == ["React", "Vue"]
+    assert s.attention["questions"] == [{"q": "Which framework?", "options": ["React", "Vue"], "multi": False}]
     assert apply(s, ev("PermissionRequest", tool_name="AskUserQuestion", tool_input=q), 2) is None
     assert s.attention["kind"] == "question" and s.attention["ts"] == 1
     multi = {"questions": [{"question": "a?", "multiSelect": True, "options": [{"label": "x"}]}]}
     s, _ = run([(1, ev("PermissionRequest", tool_name="AskUserQuestion", tool_input=multi))])
-    assert s.attention["kind"] == "question" and "options" not in s.attention
+    assert s.attention["questions"][0]["multi"] is True
+    s, _ = run([(1, ev("PermissionRequest", tool_name="ExitPlanMode", tool_input={"plan": "step one"}))])
+    assert s.attention["kind"] == "plan" and s.attention["detail"] == "step one"
     s, kinds = run([(1, ev("PreToolUse", tool_name="ExitPlanMode", tool_input={}))])
     assert kinds == ["plan"]
 

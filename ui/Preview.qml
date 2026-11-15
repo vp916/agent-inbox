@@ -16,11 +16,21 @@ Window {
           attention: { kind: "permission", text: "$ rm -rf dist/ && npm run build", ts: t - 12, answerable: true } },
         { id: "f6", project: "docs-site", entry: "cli", state: "working", action: "Asking: Which framework?", since: t - 30, pid: 6, subagents: 0,
           task: "", recent: [],
-          attention: { kind: "question", text: "Which framework should the docs use?", ts: t - 30, answerable: true, options: ["Astro", "Docusaurus", "Plain markdown"] } },
+          attention: { kind: "question", text: "Which framework should the docs use?", ts: t - 30, answerable: true,
+                       questions: [{ q: "Which framework should the docs use?", options: ["Astro", "Docusaurus", "Plain markdown"], multi: false }] } },
+        { id: "g7", project: "shop-backend", entry: "cli", state: "working", action: "Asking: Which checks?", since: t - 20, pid: 7, subagents: 0,
+          ctx_tokens: 84210, out_tokens: 12950, task: "", recent: [],
+          attention: { kind: "question", text: "Which checks should run before deploy?", ts: t - 20, answerable: true,
+                       questions: [{ q: "Which checks should run before deploy?", options: ["Tests", "Lint", "Type check"], multi: true },
+                                   { q: "Deploy target?", options: ["Staging", "Production"], multi: false }] } },
+        { id: "h8", project: "blog", entry: "claude-vscode", state: "working", action: "Plan ready for review", since: t - 45, pid: 8, subagents: 0,
+          task: "add an RSS feed", recent: [],
+          attention: { kind: "plan", text: "Plan ready for review", ts: t - 45,
+                       detail: "## Plan\n1. Add a feed.xml route that renders the 20 newest posts.\n2. Link it from the page head.\n3. Add a test that the feed validates." } },
         { id: "b2", project: "vision-train", entry: "claude-vscode", state: "idle", action: "Finished", since: t - 250, pid: 2, subagents: 0,
           task: "fix the mAP drop after the augmentation change", recent: [],
           attention: { kind: "done", text: "Training script fixed. The mAP drop came from a <resize> applied twice in the val loader; removed the second one and re-ran eval.", ts: t - 250 } },
-        { id: "c3", project: "agent-inbox", entry: "cli", state: "working", action: "Editing state.py", since: t - 3, pid: 3, subagents: 2,
+        { id: "c3", project: "agent-inbox", entry: "cli", state: "working", action: "Editing state.py", since: t - 3, pid: 3, subagents: 2, ctx_tokens: 238000, out_tokens: 41300,
           task: "build the overlay",
           recent: [[t - 40, "Reading PLAN.md"], [t - 31, "$ python3 tests/test_state.py"], [t - 9, "↳ Searching layershell"], [t - 3, "Editing state.py"]],
           attention: null },
@@ -34,7 +44,7 @@ Window {
         id: stage
         padding: 24; spacing: 24
         Panel { sessions: win.mock; view: "inbox" }
-        Panel { sessions: win.mock; view: "all"; open: ({ c3: true }) }
+        Panel { sessions: win.mock; view: "all"; open: ({ c3: true, h8: true }); picks: ({ g7: [["Tests", "Lint"], ["Staging"]] }) }
         Column {
             spacing: 24
             Panel { sessions: win.mock.filter(s => !s.attention); view: "inbox" }
