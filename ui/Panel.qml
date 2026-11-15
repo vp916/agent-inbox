@@ -54,7 +54,7 @@ Rectangle {
     readonly property var spinner: ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
     // which agent a session belongs to: a coloured square and its name
-    readonly property var agentColors: ({ claude: "#d97757", codex: "#19c37d", copilot: "#a371f7", antigravity: "#4c8df6" })
+    readonly property var agentColors: ({ claude: "#d97757", codex: "#19c37d", copilot: "#a371f7", antigravity: "#4c8df6", terminal: "#9aa5ce" })
     function badge(s) {
         const agent = s.agent || "claude"
         const where = (s.entry || "").replace("claude-", "")
@@ -202,7 +202,7 @@ Rectangle {
             color: panel.cFg; selectionColor: panel.cAccent
             clip: true; selectByMouse: true
             onTextEdited: field.edited(text)
-            onAccepted: field.accepted(text)
+            onAccepted: { field.accepted(text); text = "" }
         }
         Label {
             anchors.fill: input
@@ -286,6 +286,7 @@ Rectangle {
                         readonly property string kind: a ? a.kind : (s.state || "idle")
                         readonly property bool expanded: !!panel.open[s.id]
                         property bool confirmStop: false
+                        readonly property bool typing: row.s.agent === "terminal" && (!!a || expanded)
                         readonly property bool asking: !!(a && a.answerable && a.questions && a.questions.length)
                         // one single-choice question: a click or Enter answers straight away
                         readonly property bool direct: asking && a.questions.length === 1 && !a.questions[0].multi
@@ -355,7 +356,7 @@ Rectangle {
                                     Button {
                                         visible: !!row.a
                                         // agents other than Claude Code hold their own prompt while we wait
-                                        text: row.a && row.a.answerable && row.s.agent !== "claude" ? "answer there" : "dismiss"
+                                        text: row.a && row.a.answerable && ["codex", "copilot", "antigravity"].indexOf(row.s.agent) >= 0 ? "answer there" : "dismiss"
                                         onClicked: panel.command("dismiss", row.s.id, "")
                                     }
                                     Button {
@@ -382,6 +383,35 @@ Rectangle {
                                 Chip {
                                     text: "deny"; tint: panel.cRed
                                     onClicked: panel.command("deny", row.s.id, "")
+                                }
+                            }
+
+                            // a program started with `agent-inbox run`: what it last printed, and a way to type into it
+                            Label {
+                                visible: row.typing && !!(row.a && row.a.detail) && !row.expanded
+                                x: 18; width: parent.width - 18
+                                wrapMode: Text.Wrap; maximumLineCount: 8; elide: Text.ElideRight
+                                textFormat: Text.PlainText
+                                color: panel.cDim; font.pixelSize: 12
+                                text: row.a && row.a.detail ? row.a.detail : ""
+                            }
+                            Flow {
+                                visible: row.typing
+                                x: 18; width: parent.width - 18
+                                topPadding: 3; spacing: 6
+                                Field {
+                                    width: parent.width; placeholder: "type a reply, Enter to send…"
+                                    onAccepted: text => panel.command("type", row.s.id, text + "\r")
+                                }
+                                Repeater {
+                                    model: [["y", "y\r"], ["n", "n\r"], ["⏎", "\r"], ["1", "1"], ["2", "2"], ["3", "3"],
+                                            ["↑", "\x1b[A"], ["↓", "\x1b[B"], ["esc", "\x1b"], ["^C", "\x03"]]
+                                    Chip {
+                                        required property var modelData
+                                        text: modelData[0]
+                                        tint: modelData[0] === "^C" ? panel.cRed : panel.cAccent
+                                        onClicked: panel.command("type", row.s.id, modelData[1])
+                                    }
                                 }
                             }
 

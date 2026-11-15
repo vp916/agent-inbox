@@ -4,6 +4,7 @@
 One unix socket, newline-delimited JSON. The first line of a connection sets its role:
   {"kind":"event","event":{...}}         from the hook script
   {"kind":"status","status":{...}}       from the status line script: plan usage and context share
+  {"kind":"terminal","session":id}       `agent-inbox run`: further lines are events; we write {"data":...} to type into it
   {"kind":"ask","event":{...}}           a PermissionRequest; the hook waits for {"decision":...} or EOF
   {"kind":"cmd","cmd":"toggle",...}      one command, one snapshot reply
   {"kind":"subscribe","role":"overlay"}  snapshot on every change; further lines are commands
@@ -37,6 +38,7 @@ DEFAULTS = {
     "keep_days": 14,  # event log retention
     "sound": True,  # play a short sound when the overlay pops up
     "usage_warn": 80,  # % of the 5-hour or 7-day plan limit that triggers a warning
+    "terminal_idle": 10,  # s of silence before a program under `agent-inbox run` counts as waiting at a prompt
     "copilot_gate": False,  # offer Copilot's shell commands to the overlay before VS Code asks
     "copilot_wait": 30,  # s the overlay gets to answer such a command
     "antigravity_gate": False,  # the same for Antigravity's run_command (needs install.py install to apply)
@@ -90,6 +92,7 @@ class Daemon:
             self.sessions[s.id] = s
         self.subs = {}  # writer -> role
         self.usage = {}  # session id -> {"pos", "out", "ctx", "at"}: transcript reading state
+        self.terms = {}  # session id -> writer of its `agent-inbox run` wrapper
         self.pending = {}  # session id -> {"fut", "ts", "input"}: a hook waiting for an answer
         self.ui = {"visible": False, "view": "inbox", "auto": False}  # view: inbox | all | today
         self.limits = {}  # "five_hour" / "seven_day" -> {"pct", "resets_at"}, from the status line
@@ -334,6 +337,11 @@ class Daemon:
             p["fut"].set_result(decision)
             s.attention = None
             self.save(s)
+        elif c == "type":
+            w = self.terms.get(s.id) if s else None
+            if not w or w.is_closing():
+                return {"type": "error", "error": "not a program started with `agent-inbox run`"}
+            w.write((json.dumps({"data": str(m.get("text") or "")}) + "\n").encode())
         elif c == "focus":
             if not s:
                 return {"type": "error", "error": "which session?"}
@@ -360,6 +368,15 @@ class Daemon:
                 self.on_status(m.get("status") or {})
             elif kind == "ask":
                 await self.ask(m.get("event") or {}, r, w)
+            elif kind == "terminal":
+                sid = str(m.get("session"))
+                self.terms[sid] = w
+                try:
+                    while line := await r.readline():
+                        self.on_event(json.loads(line))
+                finally:
+                    self.terms.pop(sid, None)
+                    self.on_event({"hook_event_name": "SessionEnd", "session_id": sid})
             elif kind == "cmd":
                 w.write((json.dumps(self.command(m)) + "\n").encode())
                 await w.drain()

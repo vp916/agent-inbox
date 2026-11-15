@@ -27,19 +27,19 @@ Window {
     ]
     readonly property var now_: script[step]
 
-    function session(id, project, entry, action, ctx, attention) {
-        return { id: id, project: project, entry: entry, state: "working", action: action, since: t0 - 3, pid: 1, subagents: 0,
+    function session(id, project, entry, action, ctx, attention, agent) {
+        return { id: id, project: project, entry: entry, agent: agent || "claude", state: "working", action: action, since: t0 - 3, pid: 1, subagents: 0,
                  ctx_tokens: ctx, ctx_pct: Math.round(ctx / 2000), out_tokens: Math.round(ctx / 7), task: "", recent: [], attention: attention }
     }
     readonly property var sessions: [
-        session("a", "web-api", "cli", "$ npm run build", 84000,
-                now_.ask === "permission" ? { kind: "permission", text: "$ rm -rf dist/ && npm run build", ts: t0, answerable: true } : null),
+        session("a", "web-api", "vscode", "$ npm run build", 84000,
+                now_.ask === "permission" ? { kind: "permission", text: "$ rm -rf dist/ && npm run build", ts: t0, answerable: true } : null, "copilot"),
         session("b", "shop-backend", "claude-vscode", "Editing deploy.yml", 126000,
                 now_.ask === "question" ? { kind: "question", text: "Which checks should run before deploy?", ts: t0, answerable: true,
                     questions: [{ q: "Which checks should run before deploy?", options: ["Tests", "Lint", "Type check"], multi: true },
                                 { q: "Deploy target?", options: ["Staging", "Production"], multi: false }] } : null),
         session("c", "vision-train", "cli", now_.ask === "done" ? "Finished" : "$ python train.py --epochs 40", 41000,
-                now_.ask === "done" ? { kind: "done", text: "Training finished: mAP 0.71 on the validation split, weights saved to runs/exp12.", ts: t0 } : null)
+                now_.ask === "done" ? { kind: "done", text: "Training finished: mAP 0.71 on the validation split, weights saved to runs/exp12.", ts: t0 } : null, "codex")
     ]
     readonly property var turns: [
         { start: t0 - 240, end: t0 - 5, project: "vision-train", tools: 23, prompt: "train for 40 epochs and report mAP",

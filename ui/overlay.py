@@ -83,6 +83,8 @@ class Backend(QObject):
         msg = {"cmd": cmd, "session": session}
         if cmd == "answer":
             msg["answers"] = json.loads(label)  # a JSON list, one answer per question
+        elif cmd == "type":
+            msg["text"] = label  # raw characters for a program started with `agent-inbox run`
         self._write(msg)
 
     @Slot(str)

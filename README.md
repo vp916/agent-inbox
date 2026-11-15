@@ -1,26 +1,41 @@
 # agent-inbox
 
-One inbox for your coding agents. A floating overlay for Linux that shows what every agent session on your machine is doing (Claude Code, Codex, GitHub Copilot, Antigravity), pops up when one needs you, and lets you answer without switching windows.
+**One inbox for your coding agents.**
+
+You start an agent in a terminal, switch to the browser, and ten minutes later find it has been waiting for a "yes" the whole time. agent-inbox fixes that. It is a small overlay for Linux that sits in a corner of your screen, shows what every agent session on your machine is doing, pops up the moment one needs you, and lets you answer right there.
 
 ![demo](docs/demo.gif)
 
-- **Sees every session.** Any terminal, any folder, any editor, through each agent's own hook system. Every card is tagged with its agent.
-- **Works like an inbox.** A session appears when it asks for permission, asks a question, fails, or finishes a long turn. It disappears once you have dealt with it.
-- **Answer from the overlay.** Approve or deny a permission prompt. Answer the agent's questions by picking options or typing your own reply, including multi-part and multi-select questions. The prompt in the terminal keeps working too; whichever you answer first wins.
-- **Token counts.** Each card shows the session's current context size and total output tokens.
-- **Today.** A third tab lists today's turns across all projects: when, how long, how many tool calls, the prompt and how it ended.
-- **Themes.** Tokyo Night, Catppuccin, Gruvbox and Nord.
-- **Plan usage.** On Pro and Max plans the overlay shows how much of the 5-hour and 7-day limits you have used, and warns you when you cross a threshold.
-- **Stays out of the way.** Sits above other windows, only takes keyboard focus when you click a reply box, hides itself when nothing needs you.
-- **Local only.** One unix socket, no network port, no telemetry.
+It works with Claude Code, Codex, GitHub Copilot and Antigravity out of the box, and with any other terminal program (a local model, another agent, a long script) through `agent-inbox run`.
 
-Status: v0.2, tested on KDE Plasma 6 (Wayland) with Claude Code 2.1. All states and themes: [docs/preview.png](docs/preview.png).
+## What you get
+
+- **Every session in one place.** Any terminal, any folder, any editor. Each card is tagged with its agent and where it runs, for example `■ claude · cli`, `■ codex · cli`, `■ copilot · vscode`.
+- **It only bothers you when needed.** The overlay stays hidden and appears when a session asks for permission, asks a question, fails, or finishes a long task. When you have dealt with it, it hides again.
+- **Answer without switching windows.** Approve or deny a command, pick an option, or type a reply in the overlay.
+- **Jump to the right window.** Click a card and the terminal or editor running that session comes to the front.
+- **Today at a glance.** A `today` tab lists everything your agents did today: when, how long, the prompt and the result.
+- **Usage in view.** For Claude subscriptions, how much of your 5-hour and weekly limit is used, with a warning before you run out.
+- **Private.** Everything stays on your machine. No account, no network port, no telemetry.
+
+All states and themes in one picture: [docs/preview.png](docs/preview.png).
+
+## Supported agents
+
+| Agent | You see | You can answer from the overlay |
+|---|---|---|
+| **Claude Code** (terminal and VS Code extension) | current action, permission requests, questions, plans, finished, errors, tokens, plan usage | approve / deny, pick options, typed replies |
+| **Codex CLI** | current action, permission requests, finished | approve / deny |
+| **GitHub Copilot** (VS Code agent and Copilot CLI) | current action, finished, errors | approve / deny shell commands (opt-in in VS Code) |
+| **Antigravity** | current action, finished | approve / deny shell commands (opt-in) |
+| **Anything else** in a terminal, via `agent-inbox run` | last output, "waiting for input" | typed replies and key presses |
+
+Tested on KDE Plasma 6 (Wayland). Details and limits for each agent are under [Agent notes](#agent-notes).
 
 ## Requirements
 
-- A Wayland compositor with layer-shell support. KDE Plasma 6 is tested. Hyprland, Sway and niri should work but are untested. GNOME and X11 are not supported.
-- Python 3.10+, PySide6, layer-shell-qt, a systemd user session.
-- Claude Code.
+- Linux with a **Wayland** desktop that supports layer-shell: KDE Plasma 6 (tested), Hyprland, Sway, niri (should work, untested). **GNOME and X11 are not supported.**
+- Python 3.10 or newer, PySide6, layer-shell-qt, and a systemd user session.
 
 Arch / CachyOS:
 
@@ -28,7 +43,7 @@ Arch / CachyOS:
 sudo pacman -S --needed pyside6 layer-shell-qt
 ```
 
-Other distributions: install PySide6 (with QtQuick) and layer-shell-qt from your package manager. PySide6 from pip will not work for the overlay, because layer-shell-qt has to match the Qt it runs in.
+Other distributions: install PySide6 (with QtQuick) and layer-shell-qt from your package manager. PySide6 from pip does not work for the overlay, because layer-shell-qt has to match the Qt version it runs in.
 
 ## Install
 
@@ -38,65 +53,97 @@ cd agent-inbox
 python3 install.py install
 ```
 
-This does three things, all reversed by `python3 install.py uninstall`:
+That is all. The installer:
 
-| Change | Where |
+| Does this | Where |
 |---|---|
-| Hook entries (your existing settings are kept, a backup is made first) | `~/.claude/settings.json` |
-| A status line showing model, context and plan usage (only if you have none) | `~/.claude/settings.json` |
-| Two user services: daemon and overlay | `~/.config/systemd/user/agent-inbox*.service` |
-| The `agent-inbox` command | `~/.local/bin/agent-inbox` |
+| Adds hooks for each agent it finds on your machine | Claude Code `~/.claude/settings.json`, Codex `~/.codex/hooks.json`, Copilot `~/.copilot/hooks/agent-inbox.json`, Antigravity `~/.gemini/config/hooks.json` |
+| Adds a Claude Code status line (only if you have none), needed for plan usage | `~/.claude/settings.json` |
+| Starts two background services: the daemon and the overlay | `~/.config/systemd/user/agent-inbox*.service` |
+| Puts the `agent-inbox` command on your PATH | `~/.local/bin/agent-inbox` |
 
-The hooks and services point at the cloned folder. If you move it, run install again.
+Your existing settings are kept, and a backup of the Claude Code and Codex files is made first. The hooks point at the cloned folder, so if you move it, run the install again.
 
-Sessions that are already open pick the hooks up on their own; if one does not show, restart it.
+**Codex users:** Codex only runs hooks you have approved. Open Codex, type `/hooks`, and trust the agent-inbox entries.
 
-Arch users can also build a package from [`packaging/aur/PKGBUILD`](packaging/aur/PKGBUILD) with `makepkg -si`, then run `agent-inbox-setup install` as your user.
+Arch users can instead build a package from [`packaging/aur/PKGBUILD`](packaging/aur/PKGBUILD) with `makepkg -si`, then run `agent-inbox-setup install`.
 
-### Hotkey
+### Uninstall
 
-Bind `agent-inbox toggle` to a key.
+```
+python3 install.py uninstall
+```
 
-- KDE: System Settings → Keyboard → Shortcuts → Add New → Command.
-- Hyprland: `bind = SUPER, A, exec, agent-inbox toggle`
+Removes every hook, the services and the command. Your event log and config are left in place.
 
 ## Using it
 
-The overlay stays hidden until something needs you, then appears in a corner of the screen:
+Just use your agents as usual. The overlay appears on its own when something needs you.
 
 | Card | Meaning | What you can do |
 |---|---|---|
-| `allow?` | waiting on a permission prompt | approve, deny, or answer in the terminal |
-| `asks` | the agent asked a question | pick options or type a reply, or answer in the terminal |
-| `plan` | a plan is ready for review | read it under `more`; approve it in the terminal (click the card to jump there) |
-| `done` | a long turn finished | dismiss, or just send the next prompt |
-| `error` | the turn failed | dismiss |
+| `allow?` | the agent wants to run something and needs your OK | approve, deny, or answer in the agent's own window |
+| `asks` | the agent asked you a question | pick an option, type a reply, or answer in its window |
+| `plan` | a plan is ready for review | read it under `more`, approve it in the agent's window |
+| `done` | a long task finished | dismiss, or just send your next prompt |
+| `error` | the task failed | dismiss |
 
-`✕` in the header hides the overlay until the next thing needs you; `dismiss` on a card clears that card. Click a card to jump to that session's terminal window (KDE: also switches to the right Konsole tab; Hyprland and Sway are supported but untested). `more` (shown on hover) expands a card: the prompt you gave and the last few actions. `stop` (shown on hover) ends that session after a confirmation click. The `all` tab lists every open session, including the ones working quietly. The `today` tab is a history of today's turns.
+- **Click a card** to bring that session's terminal or editor window to the front. On KDE this also selects the right Konsole tab.
+- **`more`** (shown on hover) expands a card: your prompt and the last few actions.
+- **`dismiss`** clears one card. **`✕`** in the header hides the overlay until the next thing needs you.
+- **`stop`** (shown on hover) ends that session after a confirmation click.
+- **Tabs:** `inbox` shows only what needs you, `all` shows every open session, `today` shows today's history.
 
-To keep it quiet while you are already at the terminal, a permission prompt or question only pops the overlay up if it is still unanswered after 4 seconds, and "done" only counts for turns longer than 30 seconds. Both are configurable.
+To keep it quiet while you are already looking at the agent, a permission request or question only pops the overlay up if it is still unanswered after 4 seconds, and `done` only counts for tasks longer than 30 seconds. Both are adjustable.
 
-From the terminal:
+To open the overlay yourself, bind `agent-inbox toggle` to a key:
+
+- KDE: System Settings → Keyboard → Shortcuts → Add New → Command or Script.
+- Hyprland: `bind = SUPER, A, exec, agent-inbox toggle`
+
+## Any other program: `agent-inbox run`
+
+For anything without its own integration (a local model in a terminal, another agent, an installer, a long build), start it through agent-inbox:
+
+```
+agent-inbox run ollama run deepseek-r1
+agent-inbox run ./deploy.sh
+```
+
+The program runs in your terminal exactly as before. In addition it gets a card in the overlay that shows what it last printed, an alert when it looks like it is waiting for you, and a reply box:
+
+- **Type a reply** in the overlay and press Enter; it is typed into the program.
+- **Key buttons** (`y`, `n`, `⏎`, `1` `2` `3`, `↑` `↓`, `esc`, `^C`) cover yes/no prompts and menus.
+
+How "waiting for you" is decided: the program has been silent for 10 seconds and its last line looks like a prompt (ends in `?`, `:`, `>`, contains `[y/n]`, and so on), or it has been silent for 30 seconds after a long run. This is a guess, so expect an occasional false alarm or miss.
+
+An alias makes it automatic: `alias ollama='agent-inbox run ollama'`.
+
+Limits: the program has to be started this way (a terminal that is already running cannot be attached), and agent-inbox only knows what the program prints, not what it is doing.
+
+## Commands
 
 ```
 agent-inbox status                 list sessions
-agent-inbox watch                  live list
+agent-inbox watch                  live list in the terminal
 agent-inbox toggle | show | hide   overlay visibility
-agent-inbox view inbox|all|today   sessions that need you, everything, or today's history
-agent-inbox history                today's turns in the terminal
+agent-inbox view inbox|all|today   what the overlay lists
+agent-inbox history                today's tasks in the terminal
 agent-inbox dismiss [id]           clear "needs you" on one session or all
-agent-inbox approve <id>           approve a permission prompt
+agent-inbox approve <id>           approve a permission request
 agent-inbox deny <id>              deny it
 agent-inbox answer <id> <a>...     answer a question: one answer per part (an option or any text)
-agent-inbox focus <id>             bring that session's terminal to the front
+agent-inbox focus <id>             bring that session's window to the front
 agent-inbox stop <id>              end a session
+agent-inbox run <command...>       run any program under agent-inbox
+agent-inbox type <id> <text>       type text + Enter into a program started with `run`
 ```
 
 `<id>` is any unique prefix of the session id shown by `status`.
 
 ## Configuration
 
-Optional. Create `~/.config/agent-inbox/config.json` with any of these keys (defaults shown), then `systemctl --user restart agent-inbox`:
+Optional. Create `~/.config/agent-inbox/config.json` with any of these keys (defaults shown), then run `systemctl --user restart agent-inbox`:
 
 ```json
 {
@@ -104,12 +151,13 @@ Optional. Create `~/.config/agent-inbox/config.json` with any of these keys (def
   "margin": 14,
   "width": 460,
   "font": "",
+  "theme": "tokyo-night",
+  "sound": true,
   "alert_delay": 4,
   "done_min_turn": 30,
-  "keep_days": 14,
-  "sound": true,
-  "theme": "tokyo-night",
   "usage_warn": 80,
+  "keep_days": 14,
+  "terminal_idle": 10,
   "copilot_gate": false,
   "copilot_wait": 30,
   "antigravity_gate": false,
@@ -117,69 +165,59 @@ Optional. Create `~/.config/agent-inbox/config.json` with any of these keys (def
 }
 ```
 
-- `position`: `top-right`, `top-left`, `bottom-right` or `bottom-left`.
-- `font`: a font family. Empty picks the first installed one from a built-in list of monospace fonts.
-- `alert_delay`: seconds a permission prompt or question must stay unanswered before the overlay pops up.
-- `done_min_turn`: seconds a turn must run before "finished" counts as needing you.
-- `keep_days`: how long the event log is kept.
-- `theme`: `tokyo-night`, `catppuccin`, `gruvbox` or `nord`.
-- `usage_warn`: percentage of the 5-hour or 7-day plan limit at which you get a warning notification.
-- `copilot_gate`, `copilot_wait`, `antigravity_gate`, `antigravity_wait`: see the notes under Supported agents. The hook reads these on every command, so no restart is needed; turning `antigravity_gate` on or off also needs `install.py install`.
-- `sound`: play a short sound when the overlay pops up (needs `pw-play` or `paplay` and the freedesktop sound theme).
+| Key | Meaning |
+|---|---|
+| `position` | `top-right`, `top-left`, `bottom-right` or `bottom-left` |
+| `margin`, `width` | distance from the screen edges and overlay width, in pixels |
+| `font` | a font family; empty picks the first installed one from a list of common monospace fonts |
+| `theme` | `tokyo-night`, `catppuccin`, `gruvbox` or `nord` |
+| `sound` | play a short sound when the overlay pops up (needs `pw-play` or `paplay` and the freedesktop sound theme) |
+| `alert_delay` | seconds a permission request or question must stay unanswered before the overlay pops up |
+| `done_min_turn` | seconds a task must run before "finished" counts as needing you |
+| `usage_warn` | percentage of the Claude 5-hour or weekly limit at which you get a warning |
+| `keep_days` | how long the event log is kept |
+| `terminal_idle` | seconds of silence before a program started with `agent-inbox run` counts as waiting at a prompt |
+| `copilot_gate`, `copilot_wait` | see [Agent notes](#agent-notes) |
+| `antigravity_gate`, `antigravity_wait` | see [Agent notes](#agent-notes) |
+
+## Agent notes
+
+Each agent exposes different things to outside tools, so what agent-inbox can do differs.
+
+**Claude Code.** Full support. Claude Code shows its own prompt and the overlay card at the same time, and whichever you answer first wins. Plans can be read in the overlay but have to be approved in Claude Code. Plan usage needs a status line script, so the installer sets one up: a row at the bottom of each session such as `Fable 5.2 · ctx 34% · 5h 62% · 7d 41%`. If you already have a status line, it is left alone and usage is not shown. To remove ours, delete the `statusLine` entry from `~/.claude/settings.json`.
+
+**Codex CLI.** Codex holds back its own prompt while the overlay is asking. So the card appears immediately, and its button reads `answer there`, which hands the question back to Codex. If you do nothing, Codex's prompt appears after 60 seconds. Codex asks you to re-approve hooks (`/hooks`) whenever an agent-inbox update changes them.
+
+**GitHub Copilot.** Inside VS Code, Copilot does not tell outside tools when it asks for permission ("Allow once"); it only announces that it is about to run a tool. To answer from the overlay anyway, set `"copilot_gate": true`. Every shell command Copilot wants to run, except plainly read-only ones (`ls`, `cat`, `grep`, `git status` ...), is then offered to the overlay first: `approve` runs it without VS Code asking, `deny` blocks it, and `answer there` or no answer within `copilot_wait` seconds leaves it to VS Code as before. The cost: commands VS Code would have run without asking also wait for you. File edits and Copilot's own questions cannot be answered from the overlay.
+
+**Antigravity.** Same idea, with `"antigravity_gate": true` followed by `python3 install.py install` (the extra hook is only registered while the gate is on, because Antigravity requires an answer from it every time). Read-only commands, `answer there` and timeouts fall back to Antigravity's own prompt. Without the gate, Antigravity is watch only and a tool call is shown after it ran.
+
+**In general.** Token counts and plan usage are Claude Code only. Sessions of other agents appear at their first event. `stop` is offered for agents that run as their own process, not for agents inside an editor. Questions with options can be answered from the overlay for Claude Code, and for anything started with `agent-inbox run`.
+
+What has been tested how: Claude Code, Codex and the VS Code Copilot gate on live sessions; `agent-inbox run` with interactive scripts; Antigravity watching live, its gate with simulated events only.
 
 ## How it works
 
 ```
-Claude Code hooks -> hook/agent_inbox_hook.py -> unix socket -> daemon/daemon.py -> ui/overlay.py
+agent hooks ─────► hook script ─┐
+                                ├─► unix socket ─► daemon ─► overlay
+agent-inbox run ────────────────┘
 ```
 
-- **Hook script.** Forwards each hook event to the daemon and exits. It runs in the background, takes about 15 ms, and exits cleanly if the daemon is not running, so it never slows or blocks the agent. The one hook that waits is the permission request: it holds on for an answer from the overlay while Claude Code shows its own prompt as usual.
-- **Daemon.** Keeps one state per session (`daemon/state.py`, a small pure state machine), decides what needs attention and when to pop the overlay up, and removes sessions whose process has gone.
-- **Overlay.** A PySide6/QML window placed with layer-shell. `ui/Panel.qml` is the whole look; `ui/Preview.qml` renders it with sample data.
-
-## Supported agents
-
-Each card carries a coloured tag naming the agent and where it runs (`■ claude · cli`, `■ codex · cli`, `■ copilot · vscode`).
-
-| Agent | Shown in the overlay | Answer from the overlay | State |
-|---|---|---|---|
-| Claude Code (terminal, VS Code extension) | actions, permission, questions, plans, done, errors | approve / deny, options, typed replies | tested |
-| Codex CLI | actions, permission, done | approve / deny | tested live |
-| GitHub Copilot (CLI and the VS Code agent) | actions, permission, done, errors | approve / deny (VS Code: opt-in, see note) | tested live in VS Code |
-| Antigravity | actions, done | approve / deny (opt-in, see note) | watching tested live; answering simulated only |
-
-The installer adds hooks for every agent it finds on the machine:
-
-| Agent | Hooks file |
-|---|---|
-| Claude Code | `~/.claude/settings.json` |
-| Codex CLI | `~/.codex/hooks.json` |
-| GitHub Copilot | `~/.copilot/hooks/agent-inbox.json` |
-| Antigravity | `~/.gemini/config/hooks.json` |
-
-Notes:
-
-- **Codex** only runs hooks you have approved. Open Codex, type `/hooks`, and trust the agent-inbox entries; do this again after an agent-inbox update changes them.
-- **Codex and Copilot hold their own prompt while the overlay waits** (Claude Code shows both at once). So for these two the card pops up immediately, and `answer there` on the card hands the question back to the agent's own prompt. If you do nothing, their prompt appears after 60 seconds.
-- **Copilot inside VS Code** never tells hooks that it is asking for permission ("Allow once"), only that it is about to run a tool. To answer from the overlay anyway, set `"copilot_gate": true` in the config. Every shell command Copilot wants to run, except plainly read-only ones (`ls`, `git status`, `grep`, ...), is then offered to the overlay first: `approve` runs it without VS Code asking, `deny` blocks it, and `answer there` or no answer within `copilot_wait` seconds (default 30) leaves it to VS Code as before. The cost: commands VS Code would have run without asking also wait for you.
-- **Questions with options** can be answered from the overlay for Claude Code only. Codex and Copilot give hooks no way to answer them.
-- **Antigravity** has the same limitation and the same opt-in: set `"antigravity_gate": true` and run `python3 install.py install` again (the extra hook is only registered while the gate is on, because Antigravity requires an answer from it every time). Commands that are not read-only then go to the overlay first; `answer there`, no answer within `antigravity_wait` seconds, and read-only commands all fall back to Antigravity's own prompt. Without the gate Antigravity is watch only and a tool call is shown after it ran.
-- Token counts and plan usage are Claude Code only. Sessions of other agents appear at their first event.
-- The session `stop` button is offered for agents that run as their own process (Claude Code, Codex, Copilot CLI), not for agents inside an editor.
-
-## Plan usage and the status line
-
-Claude Code only exposes plan usage to a status line script, so the installer sets one up: a row at the bottom of each terminal session such as `Fable 5.2 · ctx 34% · 5h 62% · 7d 41%`. The same numbers appear at the bottom of the overlay. They show up after a session's first response, and only on claude.ai subscription plans. If you already have a status line it is left untouched and this feature stays off. To remove ours, delete the `statusLine` entry from `~/.claude/settings.json`.
+- **Hook script** (`hook/agent_inbox_hook.py`). Each agent calls it on events such as "prompt sent", "about to run a tool", "permission requested", "finished". It translates every agent's format into one common shape, passes it on and exits in about 15 ms. If agent-inbox is not running it does nothing, so your agents are never slowed down or blocked. The one event that waits is a permission request, so that the overlay can answer it.
+- **Daemon** (`daemon/`). Keeps one state per session, decides what needs your attention and when to show the overlay, and removes sessions whose process is gone. The state logic is a small, tested state machine (`daemon/state.py`).
+- **Overlay** (`ui/`). A PySide6/QML window placed with layer-shell, which is what keeps it above other windows without stealing keyboard focus. It takes the keyboard only while you type in a reply box.
+- **`agent-inbox run`** (`bin/agent-inbox`). Starts the program on a pseudo-terminal it owns, relays everything unchanged, and reports output and silence to the daemon.
 
 ## Privacy
 
-Your prompts, tool calls and the agent's last message of each turn are written to `~/.local/share/agent-inbox/events.db` on your machine so the overlay can show history and survive restarts. Events older than `keep_days` are deleted. Nothing leaves the machine.
+Prompts, tool calls and each task's final message are written to `~/.local/share/agent-inbox/events.db` on your machine, so the overlay can show history and survive restarts. Entries older than `keep_days` are deleted. Input typed while the terminal hides it (passwords) is not recorded for programs started with `agent-inbox run`. Nothing is sent anywhere.
 
 ## Limits
 
-- You can answer a question the agent asked, but you cannot send a new prompt to an idle session from the overlay.
-- Plans can be read in the overlay but must be approved in the terminal; Claude Code does not accept a plan approval from a hook.
-- Claude Code is fully supported; other agents to the extent listed under Supported agents.
+- Wayland with layer-shell only. No GNOME, no X11.
+- You can answer what an agent asks, but you cannot start a new prompt in an idle agent session from the overlay (except for programs started with `agent-inbox run`).
+- Tested on one desktop (KDE Plasma 6). Reports from Hyprland, Sway and niri are welcome.
 
 ## Development
 
@@ -188,7 +226,7 @@ python3 tests/test_state.py
 QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software qml6 ui/Preview.qml -- preview.png
 ```
 
-`ui/Demo.qml` renders the demo GIF the same way; the commands are in its header.
+`ui/Preview.qml` renders every state with sample data, without touching your screen. `ui/Demo.qml` renders the demo GIF the same way; the commands are in its header.
 
 ## License
 

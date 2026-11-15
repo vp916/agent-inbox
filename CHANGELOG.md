@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
+
+agent-inbox is no longer Claude Code only.
+
+- `agent-inbox run <command>`: any terminal program gets a card, a "waiting for input" alert, and a reply box with key buttons in the overlay.
 
 - Codex CLI sessions are shown, with approve / deny from the overlay (hooks in `~/.codex/hooks.json`).
 - GitHub Copilot sessions are shown, with approve / deny from the overlay.

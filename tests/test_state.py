@@ -108,6 +108,16 @@ def test_misc():
     apply(s, ev("PreToolUse", tool_name="Read", tool_input={}), 2)
     apply(s, again, 3)
     assert s.action == "Reading ?" and s.turn_start == 1
+    s, kinds = run([
+        (1, ev("UserPromptSubmit", prompt="$ ollama run x", _agent="terminal")),
+        (2, ev("Output", text="loading model")),
+        (9, ev("Waiting", text="Continue? [y/n]", tail="a\nContinue? [y/n]", prompt_like=True)),
+    ])  # fmt: skip
+    assert kinds == [None, None, "question"] and s.attention["answerable"] and s.action == "Waiting for input"
+    apply(s, ev("Output", text="ok"), 10)
+    assert s.attention is None and s.action == "ok"
+    assert apply(s, ev("Waiting", text="done", prompt_like=False), 20) is None  # short turn: no alert
+    assert apply(s, ev("Waiting", text="done", prompt_like=False), 60) == "done"
     s = Session.load({"id": "x", "unknown_field": 1, "project": "p"})
     assert s.project == "p"
 

@@ -72,7 +72,7 @@ class Session:
     quiet: bool = False  # user dismissed: ignore reminder notifications until the agent moves on
     pid: int | None = None
     entry: str = ""  # cli, claude-vscode, ...
-    agent: str = "claude"  # claude | codex | copilot | antigravity
+    agent: str = "claude"  # claude | codex | copilot | antigravity | terminal
     chain: list = field(default_factory=list)  # pids from the hook upwards, to find its window
     model: str = ""
     subagents: int = 0
@@ -176,6 +176,17 @@ def apply(s: Session, ev: dict, now: float):
     elif name == "StopFailure":
         act("idle", "Stopped on error")
         attend("error", ev.get("error") or ev.get("message") or "Turn failed")
+    elif name == "Output":  # a program run with `agent-inbox run` printed something
+        s.attention = None
+        act("working", short(ev.get("text"), 72) or "Running")
+    elif name == "Waiting":  # ...and has been quiet since
+        if ev.get("prompt_like"):
+            act("idle", "Waiting for input")
+            attend("question", ev.get("text") or "Waiting for input", detail=str(ev.get("tail") or "")[:1500], answerable=True)
+        else:
+            act("idle", "Quiet")
+            if now - s.turn_start >= DONE_MIN_TURN:
+                attend("done", ev.get("text") or "No output for a while", detail=str(ev.get("tail") or "")[:1500], answerable=True)
     elif name == "SubagentStart":
         s.subagents += 1
     elif name == "SubagentStop":

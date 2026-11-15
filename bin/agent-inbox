@@ -10,10 +10,14 @@
   agent-inbox approve|deny <id>   answer a permission prompt
   agent-inbox answer <id> <a>...  answer a question: one answer per part, an option (or its prefix) or any text
   agent-inbox focus <id>          bring that session's terminal window to the front
-  agent-inbox stop <id>           end that Claude Code session
+  agent-inbox stop <id>           end that session
+  agent-inbox run <command...>    run any program under agent-inbox: it gets a card, a
+                                  "waiting for input" alert, and can be typed into from the overlay
+  agent-inbox type <id> <text>    type text + Enter into a program started with `run`
 """
 import json
 import os
+import re
 import select
 import socket
 import sys
@@ -58,8 +62,174 @@ def render(snap):
     return "\n".join([head] + out)
 
 
+ANSI = re.compile(r"\x1b\][^\x07\x1b]*(\x07|\x1b\\)|\x1b\[[0-?]*[ -/]*[@-~]|\x1b[@-_]|[\x00-\x08\x0b-\x1f\x7f]")
+PROMPT = re.compile(
+    r"(\?|:|>|\$|#|%|❯|›|»)\s*$|\[y/n\]|\(y/n\)|\(yes/no\)|press (enter|any key)|password|passphrase|\(esc\)|enter to (select|confirm)",
+    re.I,
+)
+
+
+def run_terminal(argv):
+    """Run a program on a pty we own: relay it to this terminal unchanged, report what it
+    prints to the daemon, and type into it what the overlay sends."""
+    import errno
+    import fcntl
+    import pty
+    import signal
+    import termios
+    import tty
+    from collections import deque
+
+    if argv[:1] == ["--"]:
+        argv = argv[1:]
+    if not argv:
+        sys.exit("usage: agent-inbox run <command> [args...]")
+    try:
+        with open((os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")) + "/agent-inbox/config.json") as f:
+            idle = float(json.load(f).get("terminal_idle", 10))
+    except (OSError, ValueError, AttributeError, TypeError):
+        idle = 10.0
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        sock.connect(SOCK)
+    except OSError:
+        os.execvp(argv[0], argv)  # no daemon: just be the program
+    sid = f"term-{os.getpid()}"
+    sock.sendall((json.dumps({"kind": "terminal", "session": sid}) + "\n").encode())
+
+    chain, p = [], os.getpid()
+    while p > 1 and len(chain) < 12:
+        chain.append(p)
+        try:
+            with open(f"/proc/{p}/stat") as f:
+                p = int(f.read().rsplit(")", 1)[1].split()[1])
+        except (OSError, ValueError, IndexError):
+            break
+    base = {"session_id": sid, "cwd": os.getcwd(), "_agent": "terminal", "_pid": os.getpid(), "_chain": chain,
+            "_entry": os.path.basename(argv[0])}  # fmt: skip
+
+    def report(name, **fields):
+        try:
+            sock.sendall((json.dumps({**base, "hook_event_name": name, **fields}) + "\n").encode())
+        except OSError:
+            pass
+
+    child, master = pty.fork()
+    if child == 0:
+        try:
+            os.execvp(argv[0], argv)
+        except OSError as e:
+            os.write(2, f"agent-inbox: {argv[0]}: {e.strerror}\n".encode())
+            os._exit(127)
+
+    interactive = os.isatty(0)
+    saved = termios.tcgetattr(0) if interactive else None
+
+    def resize(*_):
+        try:
+            fcntl.ioctl(master, termios.TIOCSWINSZ, fcntl.ioctl(0, termios.TIOCGWINSZ, b"\0" * 8))
+        except OSError:
+            pass
+
+    if interactive:
+        tty.setraw(0)
+        resize()
+        signal.signal(signal.SIGWINCH, resize)
+
+    report("SessionStart")
+    report("UserPromptSubmit", prompt="$ " + " ".join(argv))
+    lines, partial, typed, inbox = deque(maxlen=10), "", b"", b""
+    last_out = sent_at = time.time()
+    fresh = pending = False  # output not yet reported / output since the last Enter
+    waiting = False
+    sources = [master, sock] + ([0] if True else [])
+
+    def feed(data):
+        nonlocal partial
+        text = partial + ANSI.sub("", data.decode("utf-8", "ignore").replace("\r\n", "\n"))
+        *done, partial = text.split("\n")
+        for line in done:
+            line = line.rsplit("\r", 1)[-1].strip()
+            if line and (not lines or lines[-1] != line):
+                lines.append(line[:200])
+
+    def last_line():
+        cur = partial.rsplit("\r", 1)[-1].strip()
+        return cur[:200] or (lines[-1] if lines else "")
+
+    def to_program(data):
+        nonlocal typed, pending, waiting
+        while data:
+            data = data[os.write(master, data):]
+
+    def note_input(data):
+        nonlocal typed, pending, waiting
+        typed = (typed + data)[-300:]
+        if b"\r" in data or b"\n" in data:
+            try:
+                echo = termios.tcgetattr(master)[3] & termios.ECHO
+            except termios.error:
+                echo = True
+            text = ANSI.sub("", typed.decode("utf-8", "ignore")).strip()
+            report("UserPromptSubmit", prompt=(text or "(enter)") if echo else "(hidden input)")
+            typed, pending, waiting = b"", False, False
+
+    try:
+        while True:
+            try:
+                ready = select.select(sources, [], [], 0.5)[0]
+            except InterruptedError:
+                continue
+            now = time.time()
+            if master in ready:
+                try:
+                    data = os.read(master, 65536)
+                except OSError as e:
+                    if e.errno == errno.EIO:
+                        break  # the program exited
+                    raise
+                if not data:
+                    break
+                os.write(1, data)
+                feed(data)
+                last_out, fresh, pending, waiting = now, True, True, False
+            if 0 in ready:
+                data = os.read(0, 4096)
+                if data:
+                    to_program(data)
+                    note_input(data)
+                else:
+                    sources.remove(0)
+            if sock in ready:
+                chunk = sock.recv(65536)
+                if not chunk:
+                    sources.remove(sock)
+                inbox += chunk
+                *msgs, inbox = inbox.split(b"\n")
+                for raw in msgs:
+                    data = json.loads(raw).get("data", "").encode()
+                    to_program(data)
+                    note_input(data)
+            if fresh and now - sent_at >= 1:
+                report("Output", text=last_line())
+                fresh, sent_at = False, now
+            quiet = now - last_out
+            if pending and not waiting and (quiet >= idle and PROMPT.search(last_line()) or quiet >= max(30, idle)):
+                tail = list(lines) + ([partial.strip()[:200]] if partial.strip() else [])
+                report("Waiting", text=last_line(), tail="\n".join(tail[-8:]), prompt_like=bool(PROMPT.search(last_line())))
+                waiting = True
+    finally:
+        if saved:
+            termios.tcsetattr(0, termios.TCSADRAIN, saved)
+        report("SessionEnd")
+    status = os.waitpid(child, 0)[1]
+    sys.exit(os.waitstatus_to_exitcode(status) if hasattr(os, "waitstatus_to_exitcode") else status >> 8)
+
+
 def main(a):
     cmd = a[0] if a else "status"
+    if cmd == "run":
+        run_terminal(a[1:])
     if cmd in ("-h", "--help", "help"):
         sys.exit(__doc__)
     if cmd == "watch":
@@ -78,9 +248,11 @@ def main(a):
         msg["view"] = a[1] if len(a) > 1 else ""
     elif len(a) > 1:
         msg["session"] = a[1]
-        if len(a) > 2:
+        if cmd == "type":
+            msg["text"] = " ".join(a[2:]) + "\r"
+        elif len(a) > 2:
             msg["answers"] = a[2:]
-    elif cmd in ("stop", "focus", "approve", "deny", "answer"):
+    elif cmd in ("stop", "focus", "approve", "deny", "answer", "type"):
         sys.exit(f"usage: agent-inbox {cmd} <id>")
     reply = json.loads(connect(msg).makefile().readline())
     if reply["type"] == "error":
