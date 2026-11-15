@@ -1,0 +1,86 @@
+#!/usr/bin/python3
+"""amctl: talk to the Agent Monitor daemon.
+
+  amctl status              one-shot list of sessions
+  amctl watch               live list
+  amctl toggle|show|hide    overlay visibility (bind `amctl toggle` to a hotkey)
+  amctl view inbox|all      which sessions the overlay lists
+  amctl dismiss [id]        clear "needs you" on one session (id prefix) or all
+  amctl stop <id>           end that Claude Code session
+"""
+import json
+import os
+import select
+import socket
+import sys
+import time
+
+SOCK = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}") + "/agent-monitor.sock"
+TTY = sys.stdout.isatty()
+COLOR = {"permission": 33, "question": 33, "plan": 33, "done": 32, "error": 31, "working": 36, "idle": 90}
+GLYPH = {"permission": "▲", "question": "▲", "plan": "▲", "done": "●", "error": "✗", "working": "◐", "idle": "○"}
+
+
+def connect(first):
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        s.connect(SOCK)
+    except OSError:
+        sys.exit("daemon not running. Start it: systemctl --user start agent-monitor")
+    s.sendall((json.dumps(first) + "\n").encode())
+    return s
+
+
+def ago(t):
+    d = max(0, int(time.time() - t))
+    return f"{d}s" if d < 60 else f"{d // 60}m" if d < 3600 else f"{d // 3600}h"
+
+
+def render(snap):
+    ui, out = snap["ui"], []
+    for s in snap["sessions"]:
+        a = s["attention"]
+        kind = a["kind"] if a else s["state"]
+        text = a["text"] if a else s["action"]
+        since = a["ts"] if a else s["since"]
+        line = f"{GLYPH[kind]} {s['project'][:24]:<24} {kind:<10} {text[:60]:<60} {ago(since):>4}  {s['entry'][:8]:<8} {s['id'][:8]}"
+        out.append(f"\033[{COLOR[kind]}m{line}\033[0m" if TTY else line)
+    need = sum(1 for s in snap["sessions"] if s["attention"])
+    head = f"agents: {len(snap['sessions'])} open, {need} need you | overlay {'shown' if ui['visible'] else 'hidden'}, view {ui['view']}"
+    return "\n".join([head] + out)
+
+
+def main(a):
+    cmd = a[0] if a else "status"
+    if cmd in ("-h", "--help", "help"):
+        sys.exit(__doc__)
+    if cmd == "watch":
+        s = connect({"kind": "subscribe", "role": "watch"})
+        f, snap = s.makefile(), None
+        while True:
+            if select.select([s], [], [], 1)[0]:
+                line = f.readline()
+                if not line:
+                    sys.exit("daemon went away")
+                snap = json.loads(line)
+            if snap:
+                print("\033[2J\033[H" + render(snap), flush=True)
+    msg = {"kind": "cmd", "cmd": cmd}
+    if cmd == "view":
+        msg["view"] = a[1] if len(a) > 1 else ""
+    elif len(a) > 1:
+        msg["session"] = a[1]
+    elif cmd == "stop":
+        sys.exit("usage: amctl stop <id>")
+    reply = json.loads(connect(msg).makefile().readline())
+    if reply["type"] == "error":
+        sys.exit(reply["error"])
+    if cmd == "status":
+        print(render(reply))
+
+
+if __name__ == "__main__":
+    try:
+        main(sys.argv[1:])
+    except KeyboardInterrupt:
+        pass
