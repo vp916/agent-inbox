@@ -26,7 +26,7 @@ Window {
         view: backend.view
         opacity: win.visible ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: 140 } }
-        onCommand: (cmd, session) => backend.send(cmd, session)
+        onCommand: (cmd, session, label) => backend.send(cmd, session, label)
         onViewPicked: view => backend.setView(view)
     }
 }

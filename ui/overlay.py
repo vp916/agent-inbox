@@ -62,9 +62,9 @@ class Backend(QObject):
     def view(self):
         return self._view
 
-    @Slot(str, str)
-    def send(self, cmd, session):
-        self._write({"cmd": cmd, "session": session})
+    @Slot(str, str, str)
+    def send(self, cmd, session, label):
+        self._write({"cmd": cmd, "session": session, "label": label})
 
     @Slot(str)
     def setView(self, view):

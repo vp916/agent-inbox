@@ -3,6 +3,10 @@
 
 Must never slow or block the agent: stdlib only, 1 s socket timeout,
 every error swallowed, always exits 0.
+
+PermissionRequest is the one event that waits: the daemon may send back a decision
+made in the overlay. Claude Code shows its own prompt at the same time, so the
+terminal stays usable; the daemon closes the connection once it is answered there.
 """
 import json
 import os
@@ -12,6 +16,7 @@ import time
 
 SOCK = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}") + "/agent-monitor.sock"
 MAX_STR = 2000
+ASK_WAIT = 300  # s to wait for an answer from the overlay
 
 
 def trim(v):
@@ -54,7 +59,16 @@ def main():
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     s.settimeout(1)
     s.connect(SOCK)
-    s.sendall((json.dumps({"kind": "event", "event": ev}) + "\n").encode())
+    ask = ev.get("hook_event_name") == "PermissionRequest"
+    s.sendall((json.dumps({"kind": "ask" if ask else "event", "event": ev}) + "\n").encode())
+    if ask:
+        s.settimeout(ASK_WAIT)
+        reply = s.makefile().readline()
+        decision = json.loads(reply).get("decision") if reply.strip() else None
+        if decision:
+            out = {"hookSpecificOutput": {"hookEventName": "PermissionRequest", "decision": decision}}
+            sys.stdout.write(json.dumps(out))
+            sys.stdout.flush()
     s.close()
 
 

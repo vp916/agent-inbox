@@ -45,19 +45,31 @@ def test_permission_raised_then_answered():
         (3.1, ev("Notification", notification_type="permission_prompt", message="Claude needs your permission")),
     ])  # fmt: skip
     assert kinds == [None, None, "permission", None]
-    assert s.attention == {"kind": "permission", "text": "$ rm -rf dist", "ts": 3}
+    assert s.attention == {"kind": "permission", "text": "$ rm -rf dist", "ts": 3, "call": "$ rm -rf dist"}
     apply(s, ev("PostToolUse", **bash), 9)
     assert s.attention is None and s.action == "Thinking"
 
 
 def test_question_and_plan():
-    q = {"questions": [{"question": "Which framework?"}]}
+    q = {"questions": [{"question": "Which framework?", "options": [{"label": "React"}, {"label": "Vue"}]}]}
     s, kinds = run([(1, ev("PreToolUse", tool_name="AskUserQuestion", tool_input=q))])
     assert kinds == ["question"] and s.attention["text"] == "Which framework?"
+    assert s.attention["options"] == ["React", "Vue"]
     assert apply(s, ev("PermissionRequest", tool_name="AskUserQuestion", tool_input=q), 2) is None
-    assert s.attention["kind"] == "question"
+    assert s.attention["kind"] == "question" and s.attention["ts"] == 1
+    multi = {"questions": [{"question": "a?", "multiSelect": True, "options": [{"label": "x"}]}]}
+    s, _ = run([(1, ev("PermissionRequest", tool_name="AskUserQuestion", tool_input=multi))])
+    assert s.attention["kind"] == "question" and "options" not in s.attention
     s, kinds = run([(1, ev("PreToolUse", tool_name="ExitPlanMode", tool_input={}))])
     assert kinds == ["plan"]
+
+
+def test_permission_before_pretooluse():
+    bash = {"tool_name": "Bash", "tool_input": {"command": "make"}}
+    s, kinds = run([(1, ev("PermissionRequest", **bash)), (1.1, ev("PreToolUse", **bash))])
+    assert kinds == ["permission", None] and s.attention["ts"] == 1
+    apply(s, ev("PreToolUse", tool_name="Read", tool_input={"file_path": "a"}), 2)
+    assert s.attention is None
 
 
 def test_done_only_after_long_turn():

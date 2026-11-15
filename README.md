@@ -6,6 +6,7 @@ A floating overlay for Linux that shows what your open Claude Code sessions are 
 
 - Follows every Claude Code session on the machine (terminal and VS Code) through Claude Code hooks.
 - Works like an inbox: a session appears when it asks for permission, asks a question, fails, or finishes a long turn, and disappears once you have dealt with it.
+- Answer from the overlay: approve or deny a permission prompt, or pick an option when the agent asks a multiple-choice question. The prompt in the terminal keeps working too; whichever you answer first wins.
 - Stays above other windows without taking keyboard focus.
 
 Status: early. Tested on KDE Plasma 6 (Wayland) only.
@@ -34,6 +35,8 @@ amctl watch           live list in the terminal
 amctl toggle          show / hide the overlay
 amctl view inbox|all  only sessions that need you, or everything
 amctl dismiss [id]    clear "needs you" on one session or all
+amctl approve <id>    approve a permission prompt (deny: amctl deny <id>)
+amctl answer <id> <option>   pick an option for a multiple-choice question
 amctl stop <id>       end a session
 ```
 
@@ -43,6 +46,6 @@ amctl stop <id>       end a session
 Claude Code hooks -> hook/am_hook.py -> unix socket -> daemon/amd.py -> ui/overlay.py
 ```
 
-The hook script forwards each event and exits; it runs in the background and never blocks the agent. The daemon keeps one state per session and decides what needs attention. Everything stays on the machine: one unix socket, no network port.
+The hook script forwards each event and exits; it runs in the background and never blocks the agent. The one exception is a permission request: that hook waits for an answer from the overlay while Claude Code shows its own prompt as usual. The daemon keeps one state per session and decides what needs attention. Everything stays on the machine: one unix socket, no network port.
 
 Prompts and commands are logged to `~/.local/share/agent-monitor/events.db` and pruned after 14 days.

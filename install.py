@@ -45,7 +45,9 @@ def edit_hooks(add):
     if add:
         for event in EVENTS:
             hook = {"type": "command", "command": CMD, "timeout": 5}
-            if event != "SessionEnd":  # the process is exiting; let it finish sending
+            if event == "PermissionRequest":  # waits for an answer from the overlay
+                hook["timeout"] = 330
+            elif event != "SessionEnd":  # the process is exiting; let it finish sending
                 hook["async"] = True
             hooks.setdefault(event, []).append({"hooks": [hook]})
     if hooks:

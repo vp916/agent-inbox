@@ -3,6 +3,7 @@
 
 One unix socket, newline-delimited JSON. The first line of a connection sets its role:
   {"kind":"event","event":{...}}         from the hook script
+  {"kind":"ask","event":{...}}           a PermissionRequest; the hook waits for {"decision":...} or EOF
   {"kind":"cmd","cmd":"toggle",...}      one command, one snapshot reply
   {"kind":"subscribe","role":"overlay"}  snapshot on every change; further lines are commands
 """
@@ -56,6 +57,7 @@ class Daemon:
             s = Session.load(json.loads(data))
             self.sessions[s.id] = s
         self.subs = {}  # writer -> role
+        self.pending = {}  # session id -> {"fut", "ts", "input"}: a hook waiting for an answer
         self.ui = {"visible": False, "view": "inbox", "auto": False}
 
     # ---- state out
@@ -79,7 +81,12 @@ class Daemon:
         self.db.execute("delete from sessions where id = ?", (s.id,))
 
     def settle(self):
-        """An overlay that popped up by itself hides once nothing needs the user."""
+        """Run after every change: let go of hooks whose question is no longer open, and
+        hide an overlay that popped up by itself once nothing needs the user."""
+        for sid, p in list(self.pending.items()):
+            s = self.sessions.get(sid)
+            if not (s and s.attention and s.attention["ts"] == p["ts"]) and not p["fut"].done():
+                p["fut"].set_result(None)
         if self.ui["auto"] and not any(s.attention for s in self.sessions.values()):
             self.ui.update(visible=False, auto=False)
 
@@ -106,6 +113,31 @@ class Daemon:
                 asyncio.get_running_loop().call_later(delay, self.alert, sid, s.attention["ts"])
         self.settle()
         self.broadcast()
+
+    async def ask(self, ev, r, w):
+        """A PermissionRequest hook is waiting. Hold it until the overlay answers, the
+        question is settled some other way (terminal, dismiss), or the hook goes away."""
+        self.on_event(ev)
+        s = self.sessions.get(ev.get("session_id"))
+        if not s or not s.attention or s.attention["kind"] not in ("permission", "question"):
+            return
+        fut = asyncio.get_running_loop().create_future()
+        p = self.pending[s.id] = {"fut": fut, "ts": s.attention["ts"], "input": ev.get("tool_input") or {}}
+        s.attention["answerable"] = True
+        self.broadcast()
+        gone = asyncio.ensure_future(r.read(1))
+        try:
+            await asyncio.wait({fut, gone}, return_when=asyncio.FIRST_COMPLETED)
+            if fut.done() and fut.result():
+                w.write((json.dumps({"decision": fut.result()}) + "\n").encode())
+                await w.drain()
+        finally:
+            gone.cancel()
+            if self.pending.get(s.id) is p:
+                del self.pending[s.id]
+            if s.attention and s.attention["ts"] == p["ts"]:
+                s.attention.pop("answerable", None)
+                self.broadcast()
 
     def alert(self, sid, ts):
         s = self.sessions.get(sid)
@@ -137,6 +169,24 @@ class Daemon:
             for x in [s] if s else list(self.sessions.values()):
                 x.attention, x.quiet = None, True
                 self.save(x)
+        elif c in ("approve", "deny", "answer"):
+            p = self.pending.get(s.id) if s else None
+            if not p or p["fut"].done():
+                return {"type": "error", "error": "nothing to answer for that session"}
+            if c == "deny":
+                decision = {"behavior": "deny", "message": "Denied by the user from the agent-inbox overlay"}
+            elif c == "approve":
+                decision = {"behavior": "allow"}
+            else:
+                q = (p["input"].get("questions") or [{}])[0]
+                want = (m.get("label") or "\0").rstrip("…")  # the overlay may send a shortened label
+                label = next((o["label"] for o in q.get("options") or [] if o.get("label", "").startswith(want)), None)
+                if label is None:
+                    return {"type": "error", "error": "no such option"}
+                decision = {"behavior": "allow", "updatedInput": {**p["input"], "answers": {q["question"]: label}}}
+            p["fut"].set_result(decision)
+            s.attention = None
+            self.save(s)
         elif c == "stop":
             if not (s and s.pid and is_claude(s.pid)):
                 return {"type": "error", "error": "session process not known"}
@@ -154,6 +204,8 @@ class Daemon:
             kind = m.get("kind")
             if kind == "event":
                 self.on_event(m.get("event") or {})
+            elif kind == "ask":
+                await self.ask(m.get("event") or {}, r, w)
             elif kind == "cmd":
                 w.write((json.dumps(self.command(m)) + "\n").encode())
                 await w.drain()
@@ -211,7 +263,8 @@ async def main():
     await stop.wait()
     chores.cancel()
     server.close()
-    os.unlink(SOCK)
+    if os.path.exists(SOCK):  # newer Pythons remove it on close
+        os.unlink(SOCK)
 
 
 if __name__ == "__main__":

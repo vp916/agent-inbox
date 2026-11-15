@@ -6,6 +6,8 @@
   amctl toggle|show|hide    overlay visibility (bind `amctl toggle` to a hotkey)
   amctl view inbox|all      which sessions the overlay lists
   amctl dismiss [id]        clear "needs you" on one session (id prefix) or all
+  amctl approve|deny <id>   answer a permission prompt
+  amctl answer <id> <opt>   pick an option (label prefix) for a multiple-choice question
   amctl stop <id>           end that Claude Code session
 """
 import json
@@ -70,8 +72,10 @@ def main(a):
         msg["view"] = a[1] if len(a) > 1 else ""
     elif len(a) > 1:
         msg["session"] = a[1]
-    elif cmd == "stop":
-        sys.exit("usage: amctl stop <id>")
+        if len(a) > 2:
+            msg["label"] = a[2]
+    elif cmd in ("stop", "approve", "deny", "answer"):
+        sys.exit(f"usage: amctl {cmd} <id>")
     reply = json.loads(connect(msg).makefile().readline())
     if reply["type"] == "error":
         sys.exit(reply["error"])

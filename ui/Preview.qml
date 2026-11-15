@@ -13,7 +13,10 @@ Window {
     readonly property var mock: [
         { id: "a1", project: "web-api", entry: "cli", state: "working", action: "$ npm run build", since: t - 12, pid: 1, subagents: 0,
           task: "ship the release build", recent: [],
-          attention: { kind: "permission", text: "$ rm -rf dist/ && npm run build", ts: t - 12 } },
+          attention: { kind: "permission", text: "$ rm -rf dist/ && npm run build", ts: t - 12, answerable: true } },
+        { id: "f6", project: "docs-site", entry: "cli", state: "working", action: "Asking: Which framework?", since: t - 30, pid: 6, subagents: 0,
+          task: "", recent: [],
+          attention: { kind: "question", text: "Which framework should the docs use?", ts: t - 30, answerable: true, options: ["Astro", "Docusaurus", "Plain markdown"] } },
         { id: "b2", project: "vision-train", entry: "claude-vscode", state: "idle", action: "Finished", since: t - 250, pid: 2, subagents: 0,
           task: "fix the mAP drop after the augmentation change", recent: [],
           attention: { kind: "done", text: "Training script fixed. The mAP drop came from a <resize> applied twice in the val loader; removed the second one and re-ran eval.", ts: t - 250 } },

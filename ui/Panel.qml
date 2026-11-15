@@ -7,7 +7,7 @@ Rectangle {
     property var sessions: []
     property string view: "inbox"   // inbox | all
     property var open: ({})         // session id -> expanded
-    signal command(string cmd, string session)
+    signal command(string cmd, string session, string label)
     signal viewPicked(string view)
 
     readonly property var needing: sessions.filter(s => s.attention)
@@ -83,6 +83,25 @@ Rectangle {
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
             onClicked: btn.clicked()
+        }
+    }
+
+    component Chip: Rectangle {
+        id: chip
+        property alias text: chipLabel.text
+        property color tint: panel.cAccent
+        signal clicked()
+        width: chipLabel.implicitWidth + 18; height: 24
+        color: chipArea.containsMouse ? Qt.alpha(tint, 0.18) : "transparent"
+        border.width: 1
+        border.color: chipArea.containsMouse ? tint : panel.cLine
+        Label { id: chipLabel; anchors.centerIn: parent; color: chip.tint }
+        MouseArea {
+            id: chipArea
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: chip.clicked()
         }
     }
 
@@ -196,7 +215,7 @@ Rectangle {
                             Button {
                                 visible: !!row.a
                                 text: "dismiss"
-                                onClicked: panel.command("dismiss", row.s.id)
+                                onClicked: panel.command("dismiss", row.s.id, "")
                             }
                             Button {
                                 visible: hover.hovered && !!row.s.pid
@@ -204,9 +223,33 @@ Rectangle {
                                 hot: panel.cRed
                                 active: row.confirmStop
                                 onClicked: {
-                                    if (row.confirmStop) panel.command("stop", row.s.id)
+                                    if (row.confirmStop) panel.command("stop", row.s.id, "")
                                     row.confirmStop = !row.confirmStop
                                 }
+                            }
+                        }
+                    }
+
+                    Flow {
+                        visible: !!(row.a && row.a.answerable) && (row.kind === "permission" || !!row.a.options)
+                        x: 18; width: parent.width - 18
+                        topPadding: 3; spacing: 8
+                        Chip {
+                            visible: row.kind === "permission"
+                            text: "approve"; tint: panel.cGreen
+                            onClicked: panel.command("approve", row.s.id, "")
+                        }
+                        Chip {
+                            visible: row.kind === "permission"
+                            text: "deny"; tint: panel.cRed
+                            onClicked: panel.command("deny", row.s.id, "")
+                        }
+                        Repeater {
+                            model: row.kind === "question" && row.a && row.a.options ? row.a.options : []
+                            Chip {
+                                required property string modelData
+                                text: modelData
+                                onClicked: panel.command("answer", row.s.id, modelData)
                             }
                         }
                     }

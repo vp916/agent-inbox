@@ -64,7 +64,8 @@ class Session:
     task: str = ""  # current prompt, shortened
     turn_start: float = 0
     recent: list = field(default_factory=list)  # [[ts, text], ...] newest last
-    attention: dict | None = None  # {"kind", "text", "ts"}
+    # {"kind", "text", "ts", "call"?, "options"?, "answerable"?}
+    attention: dict | None = None
     quiet: bool = False  # user dismissed: ignore reminder notifications until the agent moves on
     pid: int | None = None
     entry: str = ""  # cli, claude-vscode, ...
@@ -101,8 +102,26 @@ def apply(s: Session, ev: dict, now: float):
         if log:
             s.recent = (s.recent + [[now, action]])[-RECENT:]
 
-    def attend(kind, text):
-        s.attention = {"kind": kind, "text": short(text, 160), "ts": now}
+    def attend(kind, text, **extra):
+        s.attention = {"kind": kind, "text": short(text, 160), "ts": now, **extra}
+
+    def block():
+        """PreToolUse and PermissionRequest describe the same call and can arrive in either order."""
+        call = describe(tool, inp)
+        if was and was["kind"] in BLOCKED and was.get("call") == call:
+            return
+        if tool == "AskUserQuestion":
+            qs = inp.get("questions") or [{}]
+            extra = {}
+            if len(qs) == 1 and not qs[0].get("multiSelect"):
+                extra["options"] = [short(o.get("label"), 40) for o in qs[0].get("options") or []]
+            attend("question", qs[0].get("question"), call=call, **extra)
+        elif tool == "ExitPlanMode":
+            attend("plan", call, call=call)
+        elif name == "PermissionRequest":
+            attend("permission", call, call=call)
+        else:
+            s.attention = None  # an ordinary tool started: the agent moved on
 
     if name == "SessionStart":
         if ev.get("source") in (None, "startup", "resume"):
@@ -113,17 +132,12 @@ def apply(s: Session, ev: dict, now: float):
         s.turn_start, s.attention, s.quiet = now, None, False
         act("working", "Thinking")
     elif name == "PreToolUse":
-        s.attention, s.quiet = None, False
-        text = describe(tool, inp)
-        act("working", ("↳ " if ev.get("agent_id") else "") + text, log=True)
-        if tool == "AskUserQuestion":
-            attend("question", text.removeprefix("Asking: "))
-        elif tool == "ExitPlanMode":
-            attend("plan", text)
+        s.quiet = False
+        block()
+        act("working", ("↳ " if ev.get("agent_id") else "") + describe(tool, inp), log=True)
     elif name == "PermissionRequest":
-        if tool not in ("AskUserQuestion", "ExitPlanMode"):
-            s.quiet = False
-            attend("permission", describe(tool, inp))
+        s.quiet = False
+        block()
     elif name in ("PostToolUse", "PostToolUseFailure", "PermissionDenied"):
         if was and was["kind"] in BLOCKED:
             s.attention = None
