@@ -66,7 +66,14 @@ Your existing settings are kept, and a backup of the Claude Code and Codex files
 
 **Codex users:** Codex only runs hooks you have approved. Open Codex, type `/hooks`, and trust the agent-inbox entries.
 
-Arch users can instead build a package from [`packaging/aur/PKGBUILD`](packaging/aur/PKGBUILD) with `makepkg -si`, then run `agent-inbox-setup install`.
+Arch users can instead install the ready-made package from the [latest release](https://github.com/vp916/agent-inbox/releases/latest):
+
+```
+sudo pacman -U agent-inbox-0.3.0-1-any.pkg.tar.zst
+agent-inbox-setup install
+```
+
+or build it themselves from [`packaging/aur/PKGBUILD`](packaging/aur/PKGBUILD) with `makepkg -si`.
 
 ### Uninstall
 
