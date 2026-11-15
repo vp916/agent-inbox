@@ -93,7 +93,7 @@ def check():
         problems.append("This is not a Wayland session. The overlay needs Wayland with layer-shell support.")
     elif "GNOME" in os.environ.get("XDG_CURRENT_DESKTOP", "").upper():
         problems.append("GNOME does not support layer-shell, so the overlay cannot stay above other windows.")
-    if str(LINK.parent) not in os.environ.get("PATH", "").split(":"):
+    if not shutil.which("agent-inbox") and str(LINK.parent) not in os.environ.get("PATH", "").split(":"):
         problems.append(f"{LINK.parent} is not on your PATH; use the full path {LINK} or add it.")
     return has_qt, problems
 
@@ -125,15 +125,19 @@ def install():
         systemctl("enable", unit)
         if not systemctl("restart", unit):
             problems.append(f"{unit} did not start: journalctl --user -u {unit}")
-    LINK.parent.mkdir(parents=True, exist_ok=True)
-    LINK.unlink(missing_ok=True)
-    LINK.symlink_to(ROOT / "bin/agent-inbox")
+    command = shutil.which("agent-inbox")
+    packaged = command and Path(command).resolve() == ROOT / "bin/agent-inbox" and Path(command) != LINK
+    if not packaged:  # a distro package already put the command on PATH
+        LINK.parent.mkdir(parents=True, exist_ok=True)
+        LINK.unlink(missing_ok=True)
+        LINK.symlink_to(ROOT / "bin/agent-inbox")
+        command = LINK
     if edit_hooks(add=True):
         problems.append(
             "You already have a custom status line, so it was left alone and the plan-usage display is off. "
             f"To turn it on, pipe your status line's input through {ROOT / 'hook' / STATUS_MARK} as well."
         )
-    print(f"Installed.\n  hooks:    {SETTINGS} (backup: {BACKUP.name})\n  services: {', '.join(units)}\n  command:  {LINK}")
+    print(f"Installed.\n  hooks:    {SETTINGS} (backup: {BACKUP.name})\n  services: {', '.join(units)}\n  command:  {command}")
     print("Bind `agent-inbox toggle` to a key to show and hide the overlay.")
     for p in problems:
         print(f"\nNote: {p}")

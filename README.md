@@ -2,7 +2,7 @@
 
 A floating overlay for Linux that shows what your open Claude Code sessions are doing, pops up when one needs you, and lets you answer without switching windows.
 
-![preview](docs/preview.png)
+![demo](docs/demo.gif)
 
 - **Sees every session.** Any terminal, any folder, and the VS Code extension, through Claude Code hooks.
 - **Works like an inbox.** A session appears when it asks for permission, asks a question, fails, or finishes a long turn. It disappears once you have dealt with it.
@@ -14,7 +14,7 @@ A floating overlay for Linux that shows what your open Claude Code sessions are 
 - **Stays out of the way.** Sits above other windows, only takes keyboard focus when you click a reply box, hides itself when nothing needs you.
 - **Local only.** One unix socket, no network port, no telemetry.
 
-Status: v0.1, tested on KDE Plasma 6 (Wayland) with Claude Code 2.1.
+Status: v0.2, tested on KDE Plasma 6 (Wayland) with Claude Code 2.1. All states and themes: [docs/preview.png](docs/preview.png).
 
 ## Requirements
 
@@ -50,6 +50,8 @@ This does three things, all reversed by `python3 install.py uninstall`:
 The hooks and services point at the cloned folder. If you move it, run install again.
 
 Sessions that are already open pick the hooks up on their own; if one does not show, restart it.
+
+Arch users can also build a package from [`packaging/aur/PKGBUILD`](packaging/aur/PKGBUILD) with `makepkg -si`, then run `agent-inbox-setup install` as your user.
 
 ### Hotkey
 
@@ -150,6 +152,8 @@ Your prompts, tool calls and the agent's last message of each turn are written t
 python3 tests/test_state.py
 QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software qml6 ui/Preview.qml -- preview.png
 ```
+
+`ui/Demo.qml` renders the demo GIF the same way; the commands are in its header.
 
 ## License
 
