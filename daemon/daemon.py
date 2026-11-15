@@ -124,6 +124,7 @@ class Daemon:
             if name == "SessionEnd":
                 return
             s = self.sessions[sid] = Session(id=sid, since=now)
+            self.sessions.pop(f"pid-{ev.get('_pid')}", None)  # it was listed by discover() until now
         kind = apply(s, ev, now)
         self.db.execute("insert into events values(?, ?, ?, ?)", (now, sid, name, json.dumps(ev)))
         if s.ended:
@@ -242,6 +243,32 @@ class Daemon:
             self.subs.pop(w, None)
             w.close()
 
+    def discover(self):
+        """List Claude Code processes that have not sent an event yet (idle since before the
+        hooks were installed, or since the daemon started). Their session id is unknown, so
+        they get a placeholder that the first real event replaces."""
+        known = {s.pid for s in self.sessions.values()}
+        found = False
+        for entry in os.listdir("/proc"):
+            if not entry.isdigit() or int(entry) in known:
+                continue
+            try:
+                with open(f"/proc/{entry}/cmdline", "rb") as f:
+                    argv = f.read().split(b"\0")
+                helpers = (b"-p", b"--print", b"--chrome-native-host")  # not interactive sessions
+                if os.path.basename(argv[0]) != b"claude" or any(a in helpers for a in argv):
+                    continue
+                cwd = os.readlink(f"/proc/{entry}/cwd")
+            except OSError:
+                continue
+            now = time.time()
+            self.sessions[f"pid-{entry}"] = Session(
+                id=f"pid-{entry}", pid=int(entry), cwd=cwd, project=os.path.basename(cwd) or "?",
+                action="No activity seen yet", since=now, last=now,
+            )  # fmt: skip
+            found = True
+        return found
+
     async def housekeeping(self):
         while True:
             await asyncio.sleep(3)
@@ -254,7 +281,7 @@ class Daemon:
             ]
             for s in gone:
                 self.drop(s)
-            if gone:
+            if self.discover() or gone:
                 self.settle()
                 self.broadcast()
 
