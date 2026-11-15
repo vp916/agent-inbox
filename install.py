@@ -123,7 +123,7 @@ def edit_copilot(add):
         COPILOT_HOOKS.unlink(missing_ok=True)
         return True
     cmd = CMD.replace(" || true", " copilot || true")
-    hooks = {e: [{"type": "command", "bash": cmd, "timeoutSec": 70 if e == "PermissionRequest" else 5}] for e in COPILOT_EVENTS}
+    hooks = {e: [{"type": "command", "bash": cmd, "timeoutSec": 70 if e in ("PermissionRequest", "PreToolUse") else 5}] for e in COPILOT_EVENTS}
     COPILOT_HOOKS.parent.mkdir(exist_ok=True)
     COPILOT_HOOKS.write_text(json.dumps({"version": 1, "hooks": hooks}, indent=2) + "\n")
     return True

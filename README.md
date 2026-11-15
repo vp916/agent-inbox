@@ -109,7 +109,9 @@ Optional. Create `~/.config/agent-inbox/config.json` with any of these keys (def
   "keep_days": 14,
   "sound": true,
   "theme": "tokyo-night",
-  "usage_warn": 80
+  "usage_warn": 80,
+  "copilot_gate": false,
+  "copilot_wait": 30
 }
 ```
 
@@ -120,6 +122,7 @@ Optional. Create `~/.config/agent-inbox/config.json` with any of these keys (def
 - `keep_days`: how long the event log is kept.
 - `theme`: `tokyo-night`, `catppuccin`, `gruvbox` or `nord`.
 - `usage_warn`: percentage of the 5-hour or 7-day plan limit at which you get a warning notification.
+- `copilot_gate`, `copilot_wait`: see the Copilot note under Supported agents. The hook reads these on every command, so no restart is needed.
 - `sound`: play a short sound when the overlay pops up (needs `pw-play` or `paplay` and the freedesktop sound theme).
 
 ## How it works
@@ -140,7 +143,7 @@ Each card carries a coloured tag naming the agent and where it runs (`■ claude
 |---|---|---|---|
 | Claude Code (terminal, VS Code extension) | actions, permission, questions, plans, done, errors | approve / deny, options, typed replies | tested |
 | Codex CLI | actions, permission, done | approve / deny | tested live |
-| GitHub Copilot (CLI and the VS Code agent) | actions, permission, done, errors | approve / deny | watching tested live in VS Code; answering simulated only |
+| GitHub Copilot (CLI and the VS Code agent) | actions, permission, done, errors | approve / deny (VS Code: opt-in, see note) | watching tested live in VS Code; answering simulated only |
 | Antigravity | actions (after each tool call), done | no | simulated events only |
 
 The installer adds hooks for every agent it finds on the machine:
@@ -156,6 +159,7 @@ Notes:
 
 - **Codex** only runs hooks you have approved. Open Codex, type `/hooks`, and trust the agent-inbox entries; do this again after an agent-inbox update changes them.
 - **Codex and Copilot hold their own prompt while the overlay waits** (Claude Code shows both at once). So for these two the card pops up immediately, and `answer there` on the card hands the question back to the agent's own prompt. If you do nothing, their prompt appears after 60 seconds.
+- **Copilot inside VS Code** never tells hooks that it is asking for permission ("Allow once"), only that it is about to run a tool. To answer from the overlay anyway, set `"copilot_gate": true` in the config. Every shell command Copilot wants to run, except plainly read-only ones (`ls`, `git status`, `grep`, ...), is then offered to the overlay first: `approve` runs it without VS Code asking, `deny` blocks it, and `answer there` or no answer within `copilot_wait` seconds (default 30) leaves it to VS Code as before. The cost: commands VS Code would have run without asking also wait for you.
 - **Questions with options** can be answered from the overlay for Claude Code only. Codex and Copilot give hooks no way to answer them.
 - **Antigravity** is watch only: a tool call is reported after it ran. Its only pre-execution hook would have to decide every tool call, so it is not used.
 - Token counts and plan usage are Claude Code only. Sessions of other agents appear at their first event.

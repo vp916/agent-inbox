@@ -37,6 +37,8 @@ DEFAULTS = {
     "keep_days": 14,  # event log retention
     "sound": True,  # play a short sound when the overlay pops up
     "usage_warn": 80,  # % of the 5-hour or 7-day plan limit that triggers a warning
+    "copilot_gate": False,  # offer Copilot's shell commands to the overlay before VS Code asks
+    "copilot_wait": 30,  # s the overlay gets to answer such a command
     "theme": "tokyo-night",  # tokyo-night | catppuccin | gruvbox | nord
 }
 STALE_HOURS = 6  # drop sessions with unknown pid after this long without events

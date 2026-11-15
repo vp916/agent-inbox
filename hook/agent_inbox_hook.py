@@ -15,9 +15,15 @@ A permission request is the one event that waits: the daemon may send back a dec
 made in the overlay. Claude Code shows its own prompt at the same time, so either side can
 answer. Codex and Copilot hold their prompt until the hook returns, so for them the wait
 is short (ASK_WAIT) and the overlay offers "answer there", which releases the hook.
+
+Copilot inside VS Code never sends a permission request, only "about to run a tool". With
+copilot_gate on (config), shell commands that are not plainly read-only are therefore
+offered to the overlay first: approve runs the command without VS Code asking, deny blocks
+it, and no answer leaves the decision to VS Code as usual.
 """
 import json
 import os
+import re
 import socket
 import sys
 
@@ -25,6 +31,45 @@ SOCK = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}") + "/agent-i
 MAX_STR = 2000
 # s to wait for an answer from the overlay, per agent
 ASK_WAIT = {"claude": 300, "codex": 60, "copilot": 60}
+
+
+CONFIG = (os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")) + "/agent-inbox/config.json"
+# commands that only look at things; never worth interrupting for
+READ_ONLY = re.compile(
+    r"^(cd|ls|pwd|cat|head|tail|wc|echo|printf|grep|rg|find|which|file|stat|tree|date|true"
+    r"|git\s+(--no-pager\s+)?(status|diff|log|show|branch|remote|ls-files|rev-parse))(\s|$)"
+)
+
+
+def config():
+    try:
+        with open(CONFIG) as f:
+            cfg = json.load(f)
+        return cfg if isinstance(cfg, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def read_only(command):
+    if not isinstance(command, str) or re.search(r"[>`]|\$\(|\bsudo\b|\brm\b", command):
+        return False
+    parts = [p.strip() for p in re.split(r"&&|\|\||[;|\n]", command) if p.strip()]
+    return bool(parts) and all(READ_ONLY.match(p) for p in parts)
+
+
+def exchange(kind, ev, wait=None):
+    """Send one message to the daemon; with `wait`, block for its reply (a decision or None)."""
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.settimeout(1)
+    s.connect(SOCK)
+    s.sendall((json.dumps({"kind": kind, "event": ev}) + "\n").encode())
+    decision = None
+    if wait:
+        s.settimeout(wait)
+        reply = s.makefile().readline()
+        decision = json.loads(reply).get("decision") if reply.strip() else None
+    s.close()
+    return decision
 
 
 def trim(v):
@@ -94,7 +139,11 @@ def main():
         (pid for pid, argv in chain if any(agent.encode() in os.path.basename(a) for a in argv[:2])), None
     )
     ev["_chain"] = [pid for pid, _ in chain]  # for bringing its window to the front
-    in_vscode = env.get("TERM_PROGRAM") == "vscode" or any(k.startswith("VSCODE_") for k in env)
+    in_vscode = (
+        env.get("TERM_PROGRAM") == "vscode"
+        or any(k.startswith("VSCODE_") for k in env)
+        or any(b"/code/" in argv[0] or b"copilot-sdk" in argv[0] for _, argv in chain)
+    )
     ev["_entry"] = (
         (agent == "claude" and env.get("CLAUDE_CODE_ENTRYPOINT"))
         or ("ide" if agent == "antigravity" else "vscode" if in_vscode else "cli")
@@ -104,22 +153,32 @@ def main():
     if agent == "antigravity":
         sys.stdout.write("{}")  # "no opinion" for every event we listen to
         sys.stdout.flush()
-    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.settimeout(1)
-    s.connect(SOCK)
-    ask = ev.get("hook_event_name") == "PermissionRequest" and agent in ASK_WAIT
-    s.sendall((json.dumps({"kind": "ask" if ask else "event", "event": ev}) + "\n").encode())
-    if ask:
-        s.settimeout(ASK_WAIT[agent])
-        reply = s.makefile().readline()
-        decision = json.loads(reply).get("decision") if reply.strip() else None
+    name = ev.get("hook_event_name")
+    if name == "PermissionRequest" and agent in ASK_WAIT:
+        decision = exchange("ask", ev, ASK_WAIT[agent])
         if decision:
             out = {"hookSpecificOutput": {"hookEventName": "PermissionRequest", "decision": decision}}
             if agent == "copilot":  # Copilot reads the decision from the top level
                 out = {**decision, **out}
             sys.stdout.write(json.dumps(out))
             sys.stdout.flush()
-    s.close()
+        return
+    exchange("event", ev)
+
+    command = (ev.get("tool_input") or {}).get("command") if isinstance(ev.get("tool_input"), dict) else None
+    if agent == "copilot" and name == "PreToolUse" and ev.get("tool_name") == "Bash" and not read_only(command):
+        cfg = config()
+        if cfg.get("copilot_gate"):
+            wait = cfg.get("copilot_wait")
+            decision = exchange("ask", dict(ev, hook_event_name="PermissionRequest"), wait if isinstance(wait, int) else 30)
+            if decision:
+                verdict = {
+                    "permissionDecision": decision["behavior"],
+                    "permissionDecisionReason": decision.get("message") or "Approved by the user in the agent-inbox overlay",
+                }
+                out = {**verdict, "hookSpecificOutput": {"hookEventName": "PreToolUse", **verdict}}
+                sys.stdout.write(json.dumps(out))
+                sys.stdout.flush()
 
 
 if __name__ == "__main__":
