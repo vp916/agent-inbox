@@ -11,7 +11,7 @@ optdepends=('pipewire: alert sound (pw-play)'
             'sound-theme-freedesktop: alert sound')
 install=agent-inbox.install
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('a20cd0375a1656d95c16abb4a3380ed94b39adcfa9772a07f5fd1240df22c185')
+sha256sums=('0cd853948cd1e7b3cd4aa5f886948841eede13ff5edbd9ca8d4afb884fd3e955')
 
 package() {
   cd "$pkgname-$pkgver"
