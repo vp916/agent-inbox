@@ -39,10 +39,10 @@ You need Linux with a **Wayland** desktop that supports layer-shell: KDE Plasma 
 
 **1. Install the package** for your distribution:
 
-Fedora 42+:
+Fedora 43+ (from [COPR](https://copr.fedorainfracloud.org/coprs/vp916/agent-inbox/), updates come with `dnf upgrade`):
 ```
-curl -LO https://github.com/vp916/agent-inbox/releases/download/v0.4.0/agent-inbox-0.4.0-1.noarch.rpm
-sudo dnf install ./agent-inbox-0.4.0-1.noarch.rpm
+sudo dnf copr enable vp916/agent-inbox
+sudo dnf install agent-inbox
 ```
 
 Kubuntu / Ubuntu 25.04+, Debian 13:
@@ -75,7 +75,7 @@ It should list your open agent sessions. Give an agent a task: when it needs you
 
 ### Update
 
-Install the new version the same way as in step 1 (with the new version number from the [latest release](https://github.com/vp916/agent-inbox/releases/latest)); `dnf`, `apt` and `pacman` replace the old one. Then run the setup again, so the services restart on the new code and the OpenCode plugin is refreshed:
+Fedora (COPR): `sudo dnf upgrade` picks up new versions. Debian, Ubuntu and Arch: install the new version the same way as in step 1, with the new version number from the [latest release](https://github.com/vp916/agent-inbox/releases/latest); `apt` and `pacman` replace the old one. Then run the setup again, so the services restart on the new code and the OpenCode plugin is refreshed:
 
 ```
 agent-inbox-setup install

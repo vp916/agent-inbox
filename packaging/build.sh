@@ -9,7 +9,7 @@ set -eu
 cd "$(dirname "$0")/.."
 V=$(sed -n 's/^pkgver=//p' packaging/aur/PKGBUILD)
 grep -q "^Version: *$V\$" packaging/rpm/agent-inbox.spec || { echo "spec version is not $V" >&2; exit 1; }
-grep -q "download/v$V/agent-inbox-$V-1.noarch.rpm" README.md || echo "note: the README install links are not at $V yet" >&2
+grep -q "download/v$V/agent-inbox_$V-1_all.deb" README.md || echo "note: the README install links are not at $V yet" >&2
 [ -z "$(git status --porcelain -- bin daemon hook ui install.py)" ] || { echo "commit your changes first" >&2; exit 1; }
 
 D=$PWD/dist
