@@ -141,7 +141,10 @@ def main():
     ev.pop("tool_result", None)
     ev = trim(ev)
 
-    chain = ancestors()
+    # OpenCode 2 runs its plugin, and so this script, in a background service shared by all its
+    # windows: no process here belongs to the session
+    detached = bool(ev.pop("_detached", False))
+    chain = [] if detached else ancestors()
     env = os.environ
     env_pid = env.get("CLAUDE_PID", "") if agent == "claude" else ""
     ev["_agent"] = agent
@@ -161,7 +164,7 @@ def main():
     )
     ev["_entry"] = (
         (agent == "claude" and env.get("CLAUDE_CODE_ENTRYPOINT"))
-        or ("ide" if agent == "antigravity" else "vscode" if in_vscode else "cli")
+        or ("ide" if agent == "antigravity" else "vscode" if in_vscode and not detached else "cli")
     )
     ev["_project_dir"] = env.get("CLAUDE_PROJECT_DIR", "")
 

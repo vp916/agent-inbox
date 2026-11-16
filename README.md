@@ -25,7 +25,7 @@ All states and themes in one picture: [docs/preview.png](docs/preview.png).
 | Agent | You see | You can answer from the overlay |
 |---|---|---|
 | **Claude Code** (terminal and VS Code extension) | current action, permission requests, questions, plans, finished, errors, tokens, plan usage | approve / deny, pick options, typed replies |
-| **OpenCode** (terminal) | current action, permission requests, questions, finished, errors | approve / deny, pick options, typed replies |
+| **OpenCode** 1.x and 2.x | current action, permission requests, questions, finished, errors | approve / deny, pick options, typed replies |
 | **Codex CLI** | current action, permission requests, finished | approve / deny |
 | **GitHub Copilot** (VS Code agent and Copilot CLI) | current action, finished, errors | approve / deny shell commands (opt-in in VS Code) |
 | **Antigravity** | current action, finished | approve / deny shell commands (opt-in) |
@@ -197,7 +197,7 @@ Each agent exposes different things to outside tools, so what agent-inbox can do
 
 **Claude Code.** Full support. Claude Code shows its own prompt and the overlay card at the same time, and whichever you answer first wins. Plans can be read in the overlay but have to be approved in Claude Code. Plan usage needs a status line script, so the installer sets one up: a row at the bottom of each session such as `Fable 5.2 · ctx 34% · 5h 62% · 7d 41%`. If you already have a status line, it is left alone and usage is not shown. To remove ours, delete the `statusLine` entry from `~/.claude/settings.json`.
 
-**OpenCode.** Full support for permissions and questions, through a plugin the installer puts in `~/.config/opencode/plugins/agent-inbox.js` (OpenCode has no hook scripts). As with Claude Code, OpenCode's own prompt and the overlay card are open at the same time and either can answer; `approve` allows the command once. Restart open OpenCode sessions after installing so they load the plugin. Built for OpenCode 1.x; OpenCode 2 changes its plugin API.
+**OpenCode.** Full support for permissions and questions, through a plugin the installer puts in `~/.config/opencode/plugins/agent-inbox.js` (OpenCode has no hook scripts). As with Claude Code, OpenCode's own prompt and the overlay card are open at the same time and either can answer; `approve` allows the command once. The same plugin works with OpenCode 1.x and 2.x. On 1.x, restart open OpenCode windows after installing; 2.x picks it up by itself. OpenCode 2 runs every session in one shared background service rather than in its window, so for 2.x sessions `stop` and click-to-focus are not available, and a session whose window you closed stays in the `all` list until it has been idle for 6 hours.
 
 **Codex CLI.** Codex holds back its own prompt while the overlay is asking. So the card appears immediately, and its button reads `answer there`, which hands the question back to Codex. If you do nothing, Codex's prompt appears after 60 seconds. Codex asks you to re-approve hooks (`/hooks`) whenever an agent-inbox update changes them.
 
@@ -207,7 +207,7 @@ Each agent exposes different things to outside tools, so what agent-inbox can do
 
 **In general.** Token counts and plan usage are Claude Code only. Sessions of other agents appear at their first event. `stop` is offered for agents that run as their own process, not for agents inside an editor. Questions with options can be answered from the overlay for Claude Code and OpenCode, and for anything started with `agent-inbox run`.
 
-What has been tested how: Claude Code, OpenCode 1.19, Codex, the VS Code Copilot gate and the Antigravity gate on live sessions; `agent-inbox run` with interactive scripts.
+What has been tested how: Claude Code, OpenCode 1.19 and 2.3, Codex, the VS Code Copilot gate and the Antigravity gate on live sessions; `agent-inbox run` with interactive scripts.
 
 ## How it works
 
