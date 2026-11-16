@@ -1,5 +1,8 @@
 # agent-inbox
 
+[![Latest release](https://img.shields.io/github/v/release/vp916/agent-inbox)](https://github.com/vp916/agent-inbox/releases/latest)
+[![Fedora COPR](https://copr.fedorainfracloud.org/coprs/vp916/agent-inbox/package/agent-inbox/status_image/last_build.png)](https://copr.fedorainfracloud.org/coprs/vp916/agent-inbox/package/agent-inbox/)
+
 **One inbox for your coding agents.**
 
 You start an agent in a terminal, switch to the browser, and ten minutes later find it has been waiting for a "yes" the whole time. agent-inbox fixes that. It is a small overlay for Linux that sits in a corner of your screen, shows what every agent session on your machine is doing, pops up the moment one needs you, and lets you answer right there.
