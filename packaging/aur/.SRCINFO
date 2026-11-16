@@ -15,6 +15,6 @@ pkgbase = agent-inbox
 	optdepends = pipewire: alert sound (pw-play)
 	optdepends = sound-theme-freedesktop: alert sound
 	source = agent-inbox-0.4.0.tar.gz::https://github.com/vp916/agent-inbox/archive/refs/tags/v0.4.0.tar.gz
-	sha256sums = 0cd853948cd1e7b3cd4aa5f886948841eede13ff5edbd9ca8d4afb884fd3e955
+	sha256sums = 7e952a63dd0adfc7b0a2420b006f9c4778623aceb53a4c75f864baab41ccc965
 
 pkgname = agent-inbox
