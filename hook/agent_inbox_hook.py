@@ -142,9 +142,12 @@ def main():
     env_pid = env.get("CLAUDE_PID", "") if agent == "claude" else ""
     ev["_agent"] = agent
     # the agent's own process (so a session can be stopped and noticed when it exits);
-    # absent for agents that live inside an editor
+    # absent for agents that live inside an editor. Codex runs hooks from its `app-server`
+    # background process, which is not the session: stopping it only disconnects the TUI.
     ev["_pid"] = int(env_pid) if env_pid.isdigit() else next(
-        (pid for pid, argv in chain if any(agent.encode() in os.path.basename(a) for a in argv[:2])), None
+        (pid for pid, argv in chain
+         if any(agent.encode() in os.path.basename(a) for a in argv[:2]) and b"app-server" not in argv),
+        None,
     )
     ev["_chain"] = [pid for pid, _ in chain]  # for bringing its window to the front
     in_vscode = (

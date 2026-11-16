@@ -182,8 +182,9 @@ class Daemon:
             if name == "SessionEnd":
                 return
             s = self.sessions[sid] = Session(id=sid, since=now)
-            self.sessions.pop(f"pid-{ev.get('_pid')}", None)  # it was listed by discover() until now
         kind = apply(s, ev, now)
+        if s.pid:  # it may have been listed by discover() until now
+            self.sessions.pop(f"pid-{s.pid}", None)
         if s.agent == "claude" and name in ("Stop", "PostToolUse", "SessionStart") and ev.get("transcript_path"):
             self.read_usage(s, ev["transcript_path"], now, force=name != "PostToolUse")
         self.db.execute("insert into events values(?, ?, ?, ?)", (now, sid, name, json.dumps(ev)))
