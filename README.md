@@ -135,6 +135,7 @@ agent-inbox status                 list sessions
 agent-inbox watch                  live list in the terminal
 agent-inbox toggle | show | hide   overlay visibility
 agent-inbox view inbox|all|today   what the overlay lists
+agent-inbox screen [next|<name>]   list screens, or move the overlay to the next / a named screen
 agent-inbox history                today's tasks in the terminal
 agent-inbox dismiss [id]           clear "needs you" on one session or all
 agent-inbox approve <id>           approve a permission request
@@ -155,6 +156,7 @@ Optional. Create `~/.config/agent-inbox/config.json` with any of these keys (def
 ```json
 {
   "position": "top-right",
+  "screen": "active",
   "margin": 14,
   "width": 460,
   "font": "",
@@ -175,6 +177,7 @@ Optional. Create `~/.config/agent-inbox/config.json` with any of these keys (def
 | Key | Meaning |
 |---|---|
 | `position` | `top-right`, `top-left`, `bottom-right` or `bottom-left` |
+| `screen` | with several monitors: `active` opens the overlay on the screen you are working on, `primary` on the primary screen, or a screen name (see `agent-inbox screen`) pins it there |
 | `margin`, `width` | distance from the screen edges and overlay width, in pixels |
 | `font` | a font family; empty picks the first installed one from a list of common monospace fonts |
 | `theme` | `tokyo-night`, `catppuccin`, `gruvbox` or `nord` |

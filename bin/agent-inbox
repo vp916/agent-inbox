@@ -5,6 +5,8 @@
   agent-inbox watch               live list
   agent-inbox toggle|show|hide    overlay visibility (bind `agent-inbox toggle` to a hotkey)
   agent-inbox view inbox|all|today  what the overlay lists (today = history of today's turns)
+  agent-inbox screen [next|active|primary|<name>]  which screen the overlay opens on
+                                  (active = the one you are working on); no argument lists them
   agent-inbox history             today's turns: when, project, how long, prompt, result
   agent-inbox dismiss [id]        clear "needs you" on one session (id prefix) or all
   agent-inbox approve|deny <id>   answer a permission prompt
@@ -246,6 +248,8 @@ def main(a):
     msg = {"kind": "cmd", "cmd": cmd}
     if cmd == "view":
         msg["view"] = a[1] if len(a) > 1 else ""
+    elif cmd == "screen":
+        msg["screen"] = a[1] if len(a) > 1 else ""
     elif len(a) > 1:
         msg["session"] = a[1]
         if cmd == "type":
@@ -259,6 +263,13 @@ def main(a):
         sys.exit(reply["error"])
     if cmd == "status":
         print(render(reply))
+    if cmd == "screen":
+        ui = reply["ui"]
+        print(f"overlay opens on: {ui['screen']}" + (f" (now on {ui['on']})" if ui.get("on") else ""))
+        for name in ui.get("screens") or []:
+            print(f"  {'*' if name == ui.get('on') else ' '} {name}")
+        if not ui.get("screens"):
+            print("  (screen list unknown: the overlay is not running)")
     if cmd == "history":
         for t in reversed(reply["turns"]):
             took = ago(time.time() - (t["end"] - t["start"])) if t["end"] else ("running" if t.get("live") else "unfinished")

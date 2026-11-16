@@ -30,6 +30,7 @@ DATA = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local/share") / "
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "agent-inbox/config.json"
 DEFAULTS = {
     "position": "top-right",  # top-right | top-left | bottom-right | bottom-left
+    "screen": "active",  # active (the one you are working on) | primary | a screen name, see `agent-inbox screen`
     "margin": 14,  # px from the screen edges
     "width": 460,  # px
     "font": "",  # font family; empty picks the first installed monospace from a built-in list
@@ -94,7 +95,8 @@ class Daemon:
         self.usage = {}  # session id -> {"pos", "out", "ctx", "at"}: transcript reading state
         self.terms = {}  # session id -> writer of its `agent-inbox run` wrapper
         self.pending = {}  # session id -> {"fut", "ts", "input"}: a hook waiting for an answer
-        self.ui = {"visible": False, "view": "inbox", "auto": False}  # view: inbox | all | today
+        # view: inbox | all | today. screen: where the overlay opens; screens / on: reported by the overlay
+        self.ui = {"visible": False, "view": "inbox", "auto": False, "screen": self.cfg["screen"], "screens": [], "on": ""}
         self.limits = {}  # "five_hour" / "seven_day" -> {"pct", "resets_at"}, from the status line
         self.warned = {}  # window -> resets_at already warned about
         self.history = []  # today's turns, only kept fresh while the "today" view is open
@@ -308,6 +310,14 @@ class Daemon:
             self.ui["view"] = m["view"]
             if m["view"] == "today":
                 self.load_history()
+        elif c == "screen":
+            err = self.place(m.get("screen") or "")
+            if err:
+                return {"type": "error", "error": err}
+        elif c == "screens":  # from the overlay: the screens it sees and the one it is on
+            names = m.get("names")
+            self.ui.update(screens=[n for n in names if isinstance(n, str)] if isinstance(names, list) else [],
+                           on=str(m.get("on") or ""))  # fmt: skip
         elif c == "history":
             self.load_history()
             return {"type": "history", "turns": self.history}
@@ -357,6 +367,20 @@ class Daemon:
         self.settle()
         self.broadcast()
         return self.snapshot()
+
+    def place(self, want):
+        """Choose where the overlay opens: active | primary | next | a screen name."""
+        names = self.ui["screens"]
+        if want == "next":
+            if len(names) < 2:
+                return "there is only one screen"
+            on = self.ui["on"]
+            want = names[(names.index(on) + 1) % len(names)] if on in names else names[0]
+        if want not in ("", "active", "primary") and names and want not in names:
+            return f"no screen named '{want}'. Screens: {', '.join(names)}"
+        if want:
+            self.ui.update(screen=want, visible=True, auto=False)  # show it, so you see where it went
+        return None
 
     # ---- plumbing
     async def handle(self, r, w):

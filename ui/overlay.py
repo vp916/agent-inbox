@@ -20,8 +20,12 @@ class Backend(QObject):
         super().__init__()
         self._sessions, self._visible, self._view, self._config, self._history = [], False, "inbox", {}, []
         self._limits = {}
+        self._screen, self._on = "active", ""
+        app = QGuiApplication.instance()
+        for sig in (app.screenAdded, app.screenRemoved, app.primaryScreenChanged):
+            sig.connect(self._screens_changed)
         self.sock = QLocalSocket(self)
-        self.sock.connected.connect(lambda: self._write({"kind": "subscribe", "role": "overlay"}))
+        self.sock.connected.connect(self._subscribe)
         self.sock.readyRead.connect(self._read)
         self.sock.disconnected.connect(self._lost)
         self.sock.errorOccurred.connect(self._lost)
@@ -32,6 +36,20 @@ class Backend(QObject):
     def _connect(self):
         if self.sock.state() == QLocalSocket.LocalSocketState.UnconnectedState:
             self.sock.connectToServer(SOCK)
+
+    def _subscribe(self):
+        self._write({"kind": "subscribe", "role": "overlay"})
+        self._report()
+
+    def _screens_changed(self, *_):
+        self.changed.emit()
+        self._report()
+
+    def _report(self):
+        """Tell the daemon which screens exist and which one the overlay is on, for `agent-inbox screen`."""
+        if self.sock.state() == QLocalSocket.LocalSocketState.ConnectedState:
+            names = [s.name() for s in QGuiApplication.screens()]
+            self._write({"cmd": "screens", "names": names, "on": self._on})
 
     def _lost(self, *_):
         self._sessions, self._visible = [], False
@@ -45,6 +63,7 @@ class Backend(QObject):
                 self._sessions = snap["sessions"]
                 self._visible = snap["ui"]["visible"]
                 self._view = snap["ui"]["view"]
+                self._screen = snap["ui"].get("screen") or "active"
                 self._config = snap.get("config") or {}
                 self._history = snap.get("history") or []
                 self._limits = snap.get("limits") or {}
@@ -77,6 +96,22 @@ class Backend(QObject):
     @Property(str, notify=changed)
     def view(self):
         return self._view
+
+    @Property(str, notify=changed)
+    def screen(self):
+        """Where to open: active | primary | a screen name."""
+        return self._screen
+
+    @Property(str, notify=changed)
+    def primary(self):
+        s = QGuiApplication.primaryScreen()
+        return s.name() if s else ""
+
+    @Slot(str)
+    def onScreen(self, name):
+        if name != self._on:
+            self._on = name
+            self._report()
 
     @Slot(str, str, str)
     def send(self, cmd, session, label):

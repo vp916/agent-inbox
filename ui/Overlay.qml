@@ -8,12 +8,39 @@ Window {
     id: win
     width: panel.width
     height: panel.height
-    visible: backend.visible
+    visible: backend.visible && !remapping
     color: "transparent"
     flags: Qt.FramelessWindowHint
 
     readonly property string pos: backend.config.position || "top-right"
     readonly property int gap: backend.config.margin === undefined ? 14 : backend.config.margin
+
+    // Which screen: "active" lets KWin pick the one you are working on, each time the overlay
+    // opens; "primary" or a screen name pins it. A layer surface cannot move to another screen
+    // while shown, so a change hides and reopens it.
+    readonly property string place: backend.screen || "active"
+    property bool remapping: false
+    // screenConfiguration is deprecated since layer-shell-qt 6.8 but works everywhere from 6.0 on
+    LayerShell.Window.screenConfiguration: place === "active" ? LayerShell.Window.ScreenFromCompositor
+                                                              : LayerShell.Window.ScreenFromQWindow
+    function pick() {
+        const want = place === "active" || place === "primary" ? backend.primary : place
+        const all = Qt.application.screens
+        for (let i = 0; i < all.length; i++)
+            if (all[i].name === want) return all[i]
+        return null
+    }
+    function applyPlace() {
+        const s = pick()
+        if (place !== "active" && s) win.screen = s
+        if (backend.visible) { remapping = true; reopen.start() }
+    }
+    Timer { id: reopen; interval: 60; onTriggered: win.remapping = false }
+    onPlaceChanged: applyPlace()
+    readonly property string primaryName: backend.primary
+    onPrimaryNameChanged: if (place === "primary") applyPlace()
+    onScreenChanged: backend.onScreen(win.screen ? win.screen.name : "")
+    Component.onCompleted: { applyPlace(); backend.onScreen(win.screen ? win.screen.name : "") }
 
     LayerShell.Window.scope: "agent-inbox"
     LayerShell.Window.layer: LayerShell.Window.LayerOverlay

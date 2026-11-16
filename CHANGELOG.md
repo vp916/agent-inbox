@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Several monitors: the overlay opens on the screen you are working on (`screen` option), and `agent-inbox screen next` moves it to the next one. It used to always open on the primary screen.
+- `stop` on a Codex session ends Codex itself. It used to end Codex's background app-server, which only disconnected the Codex window.
+
 ## 0.3.0
 
 agent-inbox is no longer Claude Code only.
