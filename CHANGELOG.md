@@ -1,10 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
 
+- Ready-made packages on the release page: Fedora (`.rpm`), Debian / Ubuntu (`.deb`), Arch (`.pkg.tar.zst`), plus a source tarball for any distribution. No git needed to install.
 - OpenCode support (1.x and 2.x): sessions, permission prompts and questions (including multi-select and typed answers) can be seen and answered from the overlay; `stop` works on 1.x. Installed as an OpenCode plugin.
 - Several monitors: the overlay opens on the screen you are working on (`screen` option), and `agent-inbox screen next` moves it to the next one. It used to always open on the primary screen.
 - `stop` on a Codex session ends Codex itself. It used to end Codex's background app-server, which only disconnected the Codex window.
+- Long project names are cut short on a card instead of running into the text next to them.
+- The overlay also runs with older layer-shell-qt versions (Debian 13 ships 6.3).
 
 ## 0.3.0
 

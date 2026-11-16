@@ -8,8 +8,16 @@ Window {
     id: win
     width: panel.width
     height: panel.height
-    visible: backend.visible && !remapping
+    visible: ready && backend.visible && !remapping
     color: "transparent"
+
+    // Layer-shell settings that not every layer-shell-qt has (Debian 13 ships 6.3, without
+    // activateOnShow) are set from code where they exist. The window stays hidden until then,
+    // because a layer surface reads them when it is first shown.
+    property bool ready: false
+    function setLayer(name, value) {
+        if (LayerShell.Window[name] != null) LayerShell.Window[name] = value   // null or undefined: not there
+    }
     flags: Qt.FramelessWindowHint
 
     readonly property string pos: backend.config.position || "top-right"
@@ -20,9 +28,6 @@ Window {
     // while shown, so a change hides and reopens it.
     readonly property string place: backend.screen || "active"
     property bool remapping: false
-    // screenConfiguration is deprecated since layer-shell-qt 6.8 but works everywhere from 6.0 on
-    LayerShell.Window.screenConfiguration: place === "active" ? LayerShell.Window.ScreenFromCompositor
-                                                              : LayerShell.Window.ScreenFromQWindow
     function pick() {
         const want = place === "active" || place === "primary" ? backend.primary : place
         const all = Qt.application.screens
@@ -31,6 +36,9 @@ Window {
         return null
     }
     function applyPlace() {
+        // screenConfiguration is deprecated since layer-shell-qt 6.8 but still works there
+        setLayer("screenConfiguration", place === "active" ? LayerShell.Window.ScreenFromCompositor
+                                                           : LayerShell.Window.ScreenFromQWindow)
         const s = pick()
         if (place !== "active" && s) win.screen = s
         if (backend.visible) { remapping = true; reopen.start() }
@@ -40,7 +48,12 @@ Window {
     readonly property string primaryName: backend.primary
     onPrimaryNameChanged: if (place === "primary") applyPlace()
     onScreenChanged: backend.onScreen(win.screen ? win.screen.name : "")
-    Component.onCompleted: { applyPlace(); backend.onScreen(win.screen ? win.screen.name : "") }
+    Component.onCompleted: {
+        setLayer("activateOnShow", false)
+        applyPlace()
+        ready = true
+        backend.onScreen(win.screen ? win.screen.name : "")
+    }
 
     LayerShell.Window.scope: "agent-inbox"
     LayerShell.Window.layer: LayerShell.Window.LayerOverlay
@@ -52,7 +65,6 @@ Window {
     LayerShell.Window.margins.right: gap
     // focus only when the user clicks into a reply box
     LayerShell.Window.keyboardInteractivity: LayerShell.Window.KeyboardInteractivityOnDemand
-    LayerShell.Window.activateOnShow: false
 
     Panel {
         id: panel

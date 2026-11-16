@@ -3,3 +3,4 @@ __pycache__/
 # local working notes
 context.md
 PLAN.md
+dist/

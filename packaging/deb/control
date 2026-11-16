@@ -1,0 +1,16 @@
+Package: agent-inbox
+Version: @VERSION@-1
+Architecture: all
+Maintainer: vp916 <https://github.com/vp916>
+Depends: python3, python3-pyside6.qtcore, python3-pyside6.qtgui, python3-pyside6.qtnetwork, python3-pyside6.qtqml, python3-pyside6.qtquick, qml6-module-qtquick, qml6-module-qtquick-window, qml6-module-org-kde-layershell, qt6-wayland, systemd
+Recommends: pipewire-bin, sound-theme-freedesktop
+Section: utils
+Priority: optional
+Homepage: https://github.com/vp916/agent-inbox
+Description: One inbox for your coding agents
+ An overlay that shows what Claude Code, Codex, Copilot, Antigravity, OpenCode
+ and other coding agents are doing, and lets you answer their questions and
+ permission prompts without switching windows. Needs a Wayland desktop with
+ layer-shell (KDE Plasma 6, Hyprland, Sway, niri).
+ .
+ Run 'agent-inbox-setup install' as your user after installing.

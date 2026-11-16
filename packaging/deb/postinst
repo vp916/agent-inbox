@@ -1,0 +1,5 @@
+#!/bin/sh
+set -e
+if [ "$1" = configure ]; then
+  echo "Run 'agent-inbox-setup install' as your user to add the agent hooks and start the services."
+fi

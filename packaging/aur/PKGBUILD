@@ -1,6 +1,6 @@
 # Maintainer: vp916 <https://github.com/vp916>
 pkgname=agent-inbox
-pkgver=0.3.0
+pkgver=0.4.0
 pkgrel=1
 pkgdesc="One inbox for your coding agents: an overlay that shows what Claude Code, Codex, Copilot and others are doing and lets you answer them"
 arch=('any')

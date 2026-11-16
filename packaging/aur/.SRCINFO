@@ -1,6 +1,6 @@
 pkgbase = agent-inbox
 	pkgdesc = One inbox for your coding agents: an overlay that shows what Claude Code, Codex, Copilot and others are doing and lets you answer them
-	pkgver = 0.3.0
+	pkgver = 0.4.0
 	pkgrel = 1
 	url = https://github.com/vp916/agent-inbox
 	install = agent-inbox.install
@@ -14,7 +14,7 @@ pkgbase = agent-inbox
 	depends = systemd
 	optdepends = pipewire: alert sound (pw-play)
 	optdepends = sound-theme-freedesktop: alert sound
-	source = agent-inbox-0.3.0.tar.gz::https://github.com/vp916/agent-inbox/archive/refs/tags/v0.3.0.tar.gz
+	source = agent-inbox-0.4.0.tar.gz::https://github.com/vp916/agent-inbox/archive/refs/tags/v0.4.0.tar.gz
 	sha256sums = 0cd853948cd1e7b3cd4aa5f886948841eede13ff5edbd9ca8d4afb884fd3e955
 
 pkgname = agent-inbox

@@ -312,17 +312,28 @@ Rectangle {
                             spacing: 4
 
                             Item {
+                                id: head
                                 width: parent.width; height: name.implicitHeight
+                                // room left of the time; a long project name keeps at most 60 % of it
+                                readonly property real room: width - 18 - since.implicitWidth - 12
                                 Label { id: glyph; width: 18; text: panel.glyphOf(row.kind); color: panel.colorOf(row.kind) }
-                                Label { id: name; x: 18; text: row.s.project || "?"; font.bold: true }
                                 Label {
+                                    id: name; x: 18; text: row.s.project || "?"; font.bold: true
+                                    width: Math.min(implicitWidth, head.room - Math.min(meta.implicitWidth + 10, head.room * 0.4))
+                                    elide: Text.ElideRight
+                                }
+                                Label {
+                                    id: meta
                                     anchors.left: name.right; anchors.leftMargin: 10; anchors.baseline: name.baseline
+                                    width: Math.max(0, head.room - name.width - 10)
+                                    elide: Text.ElideRight
                                     textFormat: Text.StyledText
                             text: panel.badge(row.s) + (row.s.subagents ? "  +" + row.s.subagents + " agents" : "")
                                           + (row.s.ctx_tokens ? "  ctx " + panel.k(row.s.ctx_tokens) + (row.s.ctx_pct ? " " + row.s.ctx_pct + "%" : "") + " · out " + panel.k(row.s.out_tokens) : "")
                                     color: panel.cDim; font.pixelSize: 11
                                 }
                                 Label {
+                                    id: since
                                     anchors.right: parent.right
                                     text: panel.ago(row.a ? row.a.ts : row.s.since)
                                     color: panel.cDim
@@ -514,8 +525,13 @@ Rectangle {
                             Item {
                                 width: parent.width; height: turnName.implicitHeight
                                 Label { text: panel.clock(turn.h.start || 0).slice(0, 5); color: panel.cDim }
-                                Label { id: turnName; x: 52; text: turn.h.project || "?"; font.bold: true }
                                 Label {
+                                    id: turnName; x: 52; text: turn.h.project || "?"; font.bold: true
+                                    width: Math.min(implicitWidth, parent.width - 52 - turnInfo.implicitWidth - 12)
+                                    elide: Text.ElideRight
+                                }
+                                Label {
+                                    id: turnInfo
                                     anchors.right: parent.right
                                     color: turn.h.end ? panel.cDim : turn.h.live ? panel.cCyan : panel.cDim
                                     text: (turn.h.end ? panel.dur(turn.h.end - turn.h.start) : turn.h.live ? "running" : "unfinished")
