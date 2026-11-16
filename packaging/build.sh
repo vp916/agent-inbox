@@ -30,7 +30,8 @@ docker run --rm -v "$D:/out" -v "$PWD/packaging/rpm:/spec:ro" fedora:latest sh -
   rpmbuild -bb --quiet /spec/agent-inbox.spec
   cp /root/rpmbuild/RPMS/noarch/*.rpm /out/
   chown $(id -u):$(id -g) /out/*.rpm"
-for f in "$D"/*.fc*.noarch.rpm; do mv "$f" "$D/agent-inbox-$V-1.noarch.rpm"; done
+R=$(sed -n 's/^Release: *\([0-9]*\).*/\1/p' packaging/rpm/agent-inbox.spec)
+for f in "$D"/*.fc*.noarch.rpm; do mv "$f" "$D/agent-inbox-$V-$R.noarch.rpm"; done
 
 # Debian / Ubuntu
 docker run --rm -v "$D:/out" -v "$PWD/packaging/deb:/deb:ro" debian:trixie sh -ec "

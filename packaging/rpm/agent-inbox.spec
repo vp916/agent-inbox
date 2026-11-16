@@ -1,6 +1,6 @@
 Name:           agent-inbox
 Version:        0.4.0
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        One inbox for your coding agents
 License:        MIT
 URL:            https://github.com/vp916/agent-inbox
@@ -51,5 +51,8 @@ fi
 %{_bindir}/agent-inbox-setup
 
 %changelog
+* Mon Nov 16 2026 vp916 - 0.4.0-2
+- Built by COPR from the release branch; README updates only
+
 * Mon Nov 16 2026 vp916 - 0.4.0-1
 - OpenCode support, overlay on the active screen, Codex stop fix
