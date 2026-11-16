@@ -73,6 +73,18 @@ agent-inbox status
 ```
 It should list your open agent sessions. Give an agent a task: when it needs you, a card appears in the top-right corner of the screen.
 
+### Update
+
+Install the new version the same way as in step 1 (with the new version number from the [latest release](https://github.com/vp916/agent-inbox/releases/latest)); `dnf`, `apt` and `pacman` replace the old one. Then run the setup again, so the services restart on the new code and the OpenCode plugin is refreshed:
+
+```
+agent-inbox-setup install
+```
+
+From source: `git pull` in the cloned folder, then `python3 install.py install`. On OpenCode 2, also run `opencode service restart`.
+
+To hear about new versions, use **Watch → Custom → Releases** on the GitHub page.
+
 ### Uninstall
 
 ```
