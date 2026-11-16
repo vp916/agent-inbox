@@ -33,71 +33,82 @@ All states and themes in one picture: [docs/preview.png](docs/preview.png).
 
 Tested on KDE Plasma 6 (Wayland). Details and limits for each agent are under [Agent notes](#agent-notes).
 
-## Requirements
-
-- Linux with a **Wayland** desktop that supports layer-shell: KDE Plasma 6 (tested), Hyprland, Sway, niri (should work, untested). **GNOME and X11 are not supported.**
-- Python 3.10 or newer, PySide6, layer-shell-qt, and a systemd user session. The packages below pull these in for you.
-
 ## Install
 
-Download the file for your distribution from the [latest release](https://github.com/vp916/agent-inbox/releases/latest), install it, then run the setup once as your normal user:
+You need Linux with a **Wayland** desktop that supports layer-shell: KDE Plasma 6 (tested), Hyprland, Sway or niri (should work, untested). **GNOME and X11 are not supported.**
 
-| Distribution | Install the downloaded file |
-|---|---|
-| Fedora 42+ (KDE) | `sudo dnf install ./agent-inbox-0.4.0-1.noarch.rpm` |
-| Debian 13, Ubuntu / Kubuntu 25.04+ | `sudo apt install ./agent-inbox_0.4.0-1_all.deb` |
-| Arch / CachyOS | `sudo pacman -U agent-inbox-0.4.0-1-any.pkg.tar.zst` |
+**1. Install the package** for your distribution:
 
+Fedora 42+:
+```
+curl -LO https://github.com/vp916/agent-inbox/releases/download/v0.4.0/agent-inbox-0.4.0-1.noarch.rpm
+sudo dnf install ./agent-inbox-0.4.0-1.noarch.rpm
+```
+
+Kubuntu / Ubuntu 25.04+, Debian 13:
+```
+curl -LO https://github.com/vp916/agent-inbox/releases/download/v0.4.0/agent-inbox_0.4.0-1_all.deb
+sudo apt install ./agent-inbox_0.4.0-1_all.deb
+```
+
+Arch / CachyOS:
+```
+sudo pacman -U https://github.com/vp916/agent-inbox/releases/download/v0.4.0/agent-inbox-0.4.0-1-any.pkg.tar.zst
+```
+
+Other distributions: see [From source](#from-source) below.
+
+**2. Set it up**, as your normal user (no sudo):
 ```
 agent-inbox-setup install
 ```
 
-Arch users can also build the package themselves from [`packaging/aur/PKGBUILD`](packaging/aur/PKGBUILD) with `makepkg -si` (or `paru -Bi .` in that folder).
+**3. One-time steps for some agents:**
+- **Codex:** Codex only runs hooks you have approved. Open Codex, type `/hooks`, and trust the agent-inbox entries.
+- **OpenCode 2:** OpenCode loads plugins when its background service starts, so run `opencode service restart` once.
 
-### Any other distribution, or from source
+**4. Check it works:**
+```
+agent-inbox status
+```
+It should list your open agent sessions. Give an agent a task: when it needs you, a card appears in the top-right corner of the screen.
 
-Install PySide6 (with QtQuick) and layer-shell-qt from your package manager, for example:
+### Uninstall
+
+```
+agent-inbox-setup uninstall
+```
+
+Removes every hook, the services and the command; your event log and config are kept. Then remove the package with `dnf`, `apt` or `pacman`.
+
+### From source
+
+Install PySide6 (with QtQuick) and layer-shell-qt from your package manager, then run the installer from the repository:
 
 ```
 sudo pacman -S --needed pyside6 layer-shell-qt     # Arch / CachyOS
 sudo dnf install python3-pyside6 layer-shell-qt    # Fedora
-```
 
-PySide6 from pip does not work for the overlay, because layer-shell-qt has to match the Qt version it runs in.
-
-Then download `agent-inbox-0.4.0.tar.gz` from the [latest release](https://github.com/vp916/agent-inbox/releases/latest) and unpack it, or clone the repository, and run the installer from that folder:
-
-```
 git clone https://github.com/vp916/agent-inbox.git
 cd agent-inbox
-python3 install.py install
+python3 install.py install                          # uninstall: python3 install.py uninstall
 ```
 
-### What setup does
+Requires Python 3.10+ and a systemd user session. PySide6 from pip does not work for the overlay, because layer-shell-qt has to match the Qt version it runs in. The hooks point at the cloned folder, so if you move it, run the install again. Arch users can also build the package from [`packaging/aur/PKGBUILD`](packaging/aur/PKGBUILD) with `makepkg -si`.
 
-`agent-inbox-setup install` (package) and `python3 install.py install` (source) do the same thing:
+<details>
+<summary>What setup changes on your machine</summary>
 
 | Does this | Where |
 |---|---|
 | Adds hooks for each agent it finds on your machine | Claude Code `~/.claude/settings.json`, Codex `~/.codex/hooks.json`, Copilot `~/.copilot/hooks/agent-inbox.json`, Antigravity `~/.gemini/config/hooks.json`, OpenCode `~/.config/opencode/plugins/agent-inbox.js` |
 | Adds a Claude Code status line (only if you have none), needed for plan usage | `~/.claude/settings.json` |
 | Starts two background services: the daemon and the overlay | `~/.config/systemd/user/agent-inbox*.service` |
-| Puts the `agent-inbox` command on your PATH | `~/.local/bin/agent-inbox` |
+| Puts the `agent-inbox` command on your PATH | `~/.local/bin/agent-inbox` (source install only) |
 
-Your existing settings are kept, and a backup of the Claude Code and Codex files is made first. With a source install the hooks point at that folder, so if you move it, run the install again.
+Your existing settings are kept, and a backup of the Claude Code and Codex files is made first.
 
-**Codex users:** Codex only runs hooks you have approved. Open Codex, type `/hooks`, and trust the agent-inbox entries.
-
-**OpenCode 2 users:** OpenCode loads plugins when its background service starts. If it was already running, run `opencode service restart` once.
-
-### Uninstall
-
-```
-agent-inbox-setup uninstall      # package
-python3 install.py uninstall     # source
-```
-
-Removes every hook, the services and the command. Your event log and config are left in place. After that, remove the package with your package manager if you installed one.
+</details>
 
 ## Using it
 
