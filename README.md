@@ -6,11 +6,11 @@ You start an agent in a terminal, switch to the browser, and ten minutes later f
 
 ![demo](docs/demo.gif)
 
-It works with Claude Code, Codex, GitHub Copilot and Antigravity out of the box, and with any other terminal program (a local model, another agent, a long script) through `agent-inbox run`.
+It works with Claude Code, OpenCode, Codex, GitHub Copilot and Antigravity out of the box, and with any other terminal program (a local model, another agent, a long script) through `agent-inbox run`.
 
 ## What you get
 
-- **Every session in one place.** Any terminal, any folder, any editor. Each card is tagged with its agent and where it runs, for example `■ claude · cli`, `■ codex · cli`, `■ copilot · vscode`.
+- **Every session in one place.** Any terminal, any folder, any editor. Each card is tagged with its agent and where it runs, for example `■ claude · cli`, `■ opencode · cli`, `■ copilot · vscode`.
 - **It only bothers you when needed.** The overlay stays hidden and appears when a session asks for permission, asks a question, fails, or finishes a long task. When you have dealt with it, it hides again.
 - **Answer without switching windows.** Approve or deny a command, pick an option, or type a reply in the overlay.
 - **Jump to the right window.** Click a card and the terminal or editor running that session comes to the front.
@@ -25,6 +25,7 @@ All states and themes in one picture: [docs/preview.png](docs/preview.png).
 | Agent | You see | You can answer from the overlay |
 |---|---|---|
 | **Claude Code** (terminal and VS Code extension) | current action, permission requests, questions, plans, finished, errors, tokens, plan usage | approve / deny, pick options, typed replies |
+| **OpenCode** (terminal) | current action, permission requests, questions, finished, errors | approve / deny, pick options, typed replies |
 | **Codex CLI** | current action, permission requests, finished | approve / deny |
 | **GitHub Copilot** (VS Code agent and Copilot CLI) | current action, finished, errors | approve / deny shell commands (opt-in in VS Code) |
 | **Antigravity** | current action, finished | approve / deny shell commands (opt-in) |
@@ -57,7 +58,7 @@ That is all. The installer:
 
 | Does this | Where |
 |---|---|
-| Adds hooks for each agent it finds on your machine | Claude Code `~/.claude/settings.json`, Codex `~/.codex/hooks.json`, Copilot `~/.copilot/hooks/agent-inbox.json`, Antigravity `~/.gemini/config/hooks.json` |
+| Adds hooks for each agent it finds on your machine | Claude Code `~/.claude/settings.json`, Codex `~/.codex/hooks.json`, Copilot `~/.copilot/hooks/agent-inbox.json`, Antigravity `~/.gemini/config/hooks.json`, OpenCode `~/.config/opencode/plugins/agent-inbox.js` |
 | Adds a Claude Code status line (only if you have none), needed for plan usage | `~/.claude/settings.json` |
 | Starts two background services: the daemon and the overlay | `~/.config/systemd/user/agent-inbox*.service` |
 | Puts the `agent-inbox` command on your PATH | `~/.local/bin/agent-inbox` |
@@ -196,25 +197,29 @@ Each agent exposes different things to outside tools, so what agent-inbox can do
 
 **Claude Code.** Full support. Claude Code shows its own prompt and the overlay card at the same time, and whichever you answer first wins. Plans can be read in the overlay but have to be approved in Claude Code. Plan usage needs a status line script, so the installer sets one up: a row at the bottom of each session such as `Fable 5.2 · ctx 34% · 5h 62% · 7d 41%`. If you already have a status line, it is left alone and usage is not shown. To remove ours, delete the `statusLine` entry from `~/.claude/settings.json`.
 
+**OpenCode.** Full support for permissions and questions, through a plugin the installer puts in `~/.config/opencode/plugins/agent-inbox.js` (OpenCode has no hook scripts). As with Claude Code, OpenCode's own prompt and the overlay card are open at the same time and either can answer; `approve` allows the command once. Restart open OpenCode sessions after installing so they load the plugin. Built for OpenCode 1.x; OpenCode 2 changes its plugin API.
+
 **Codex CLI.** Codex holds back its own prompt while the overlay is asking. So the card appears immediately, and its button reads `answer there`, which hands the question back to Codex. If you do nothing, Codex's prompt appears after 60 seconds. Codex asks you to re-approve hooks (`/hooks`) whenever an agent-inbox update changes them.
 
 **GitHub Copilot.** Inside VS Code, Copilot does not tell outside tools when it asks for permission ("Allow once"); it only announces that it is about to run a tool. To answer from the overlay anyway, set `"copilot_gate": true`. Every shell command Copilot wants to run, except plainly read-only ones (`ls`, `cat`, `grep`, `git status` ...), is then offered to the overlay first: `approve` runs it without VS Code asking, `deny` blocks it, and `answer there` or no answer within `copilot_wait` seconds leaves it to VS Code as before. The cost: commands VS Code would have run without asking also wait for you. File edits and Copilot's own questions cannot be answered from the overlay.
 
 **Antigravity.** Same idea, with `"antigravity_gate": true` followed by `python3 install.py install` (the extra hook is only registered while the gate is on, because Antigravity requires an answer from it every time). Read-only commands, `answer there` and timeouts fall back to Antigravity's own prompt. Without the gate, Antigravity is watch only and a tool call is shown after it ran.
 
-**In general.** Token counts and plan usage are Claude Code only. Sessions of other agents appear at their first event. `stop` is offered for agents that run as their own process, not for agents inside an editor. Questions with options can be answered from the overlay for Claude Code, and for anything started with `agent-inbox run`.
+**In general.** Token counts and plan usage are Claude Code only. Sessions of other agents appear at their first event. `stop` is offered for agents that run as their own process, not for agents inside an editor. Questions with options can be answered from the overlay for Claude Code and OpenCode, and for anything started with `agent-inbox run`.
 
-What has been tested how: Claude Code, Codex, the VS Code Copilot gate and the Antigravity gate on live sessions; `agent-inbox run` with interactive scripts.
+What has been tested how: Claude Code, OpenCode 1.19, Codex, the VS Code Copilot gate and the Antigravity gate on live sessions; `agent-inbox run` with interactive scripts.
 
 ## How it works
 
 ```
-agent hooks ─────► hook script ─┐
-                                ├─► unix socket ─► daemon ─► overlay
-agent-inbox run ────────────────┘
+agent hooks ───────► hook script ─┐
+OpenCode plugin ───► hook script ─┤
+                                  ├─► unix socket ─► daemon ─► overlay
+agent-inbox run ──────────────────┘
 ```
 
 - **Hook script** (`hook/agent_inbox_hook.py`). Each agent calls it on events such as "prompt sent", "about to run a tool", "permission requested", "finished". It translates every agent's format into one common shape, passes it on and exits in about 15 ms. If agent-inbox is not running it does nothing, so your agents are never slowed down or blocked. The one event that waits is a permission request, so that the overlay can answer it.
+- **OpenCode plugin** (`hook/opencode-plugin.js`). OpenCode has no hook scripts, so a plugin inside OpenCode turns its events into the same calls to the hook script, and passes answers from the overlay to OpenCode's reply API.
 - **Daemon** (`daemon/`). Keeps one state per session, decides what needs your attention and when to show the overlay, and removes sessions whose process is gone. The state logic is a small, tested state machine (`daemon/state.py`).
 - **Overlay** (`ui/`). A PySide6/QML window placed with layer-shell, which is what keeps it above other windows without stealing keyboard focus. It takes the keyboard only while you type in a reply box.
 - **`agent-inbox run`** (`bin/agent-inbox`). Starts the program on a pseudo-terminal it owns, relays everything unchanged, and reports output and silence to the daemon.

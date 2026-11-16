@@ -2,7 +2,7 @@
 """Agent hook: forward one hook event to the agent-inbox daemon and exit.
 
 Usage: agent_inbox_hook.py [agent] [event]
-  agent = claude (default) | codex | copilot | antigravity
+  agent = claude (default) | codex | copilot | antigravity | opencode
   event = only for agents whose payload does not name the event (antigravity)
 
 Every agent's payload is translated here into one common shape (Claude Code's), so the
@@ -21,6 +21,10 @@ copilot_gate on (config), shell commands that are not plainly read-only are ther
 offered to the overlay first: approve runs the command without VS Code asking, deny blocks
 it, and no answer leaves the decision to VS Code as usual.
 
+OpenCode has no hook scripts; its plugin (opencode-plugin.js) runs this script with events it
+has already translated, and for a permission or question reads the decision printed here and
+passes it to OpenCode's reply API. OpenCode keeps its own prompt open meanwhile, like Claude Code.
+
 Antigravity works the same way with antigravity_gate: its PreToolUse hook (registered for
 run_command only, and only while the gate is on) must always print a decision, so the
 answer is allow, deny, or "ask", which is Antigravity's own prompt.
@@ -34,7 +38,7 @@ import sys
 SOCK = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}") + "/agent-inbox.sock"
 MAX_STR = 2000
 # s to wait for an answer from the overlay, per agent
-ASK_WAIT = {"claude": 300, "codex": 60, "copilot": 60}
+ASK_WAIT = {"claude": 300, "codex": 60, "copilot": 60, "opencode": 300}
 
 
 CONFIG = (os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")) + "/agent-inbox/config.json"
@@ -182,7 +186,9 @@ def main():
         decision = exchange("ask", ev, ASK_WAIT[agent])
         if decision:
             out = {"hookSpecificOutput": {"hookEventName": "PermissionRequest", "decision": decision}}
-            if agent == "copilot":  # Copilot reads the decision from the top level
+            if agent == "opencode":  # read by its plugin
+                out = {"decision": decision}
+            elif agent == "copilot":  # Copilot reads the decision from the top level
                 out = {**decision, **out}
             sys.stdout.write(json.dumps(out))
             sys.stdout.flush()

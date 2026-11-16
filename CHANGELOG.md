@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- OpenCode support: sessions, permission prompts and questions (including multi-select and typed answers) can be seen and answered from the overlay, and `stop` works. Installed as an OpenCode plugin.
 - Several monitors: the overlay opens on the screen you are working on (`screen` option), and `agent-inbox screen next` moves it to the next one. It used to always open on the primary screen.
 - `stop` on a Codex session ends Codex itself. It used to end Codex's background app-server, which only disconnected the Codex window.
 

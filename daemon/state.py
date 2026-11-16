@@ -72,7 +72,7 @@ class Session:
     quiet: bool = False  # user dismissed: ignore reminder notifications until the agent moves on
     pid: int | None = None
     entry: str = ""  # cli, claude-vscode, ...
-    agent: str = "claude"  # claude | codex | copilot | antigravity | terminal
+    agent: str = "claude"  # claude | codex | copilot | antigravity | opencode | terminal
     chain: list = field(default_factory=list)  # pids from the hook upwards, to find its window
     model: str = ""
     subagents: int = 0

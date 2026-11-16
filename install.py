@@ -30,6 +30,8 @@ COPILOT_EVENTS = [
     "SubagentStop", "Stop", "ErrorOccurred", "SessionEnd",
 ]  # fmt: skip
 ANTIGRAVITY_HOOKS = HOME / ".gemini/config/hooks.json"
+OPENCODE_DIR = Path(os.environ.get("XDG_CONFIG_HOME") or HOME / ".config") / "opencode"
+OPENCODE_PLUGIN = OPENCODE_DIR / "plugins/agent-inbox.js"
 # PreToolUse is added only with antigravity_gate: Antigravity requires a decision from it every time.
 ANTIGRAVITY_EVENTS = ["SessionStart", "PreInvocation", "PostToolUse", "Stop"]
 CODEX_EVENTS = [
@@ -160,6 +162,21 @@ def edit_antigravity(add):
     return True
 
 
+def edit_opencode(add):
+    """OpenCode has no hook scripts but loads every plugin in ~/.config/opencode/plugins/.
+    Ours forwards its events to the hook script; the two paths in it are filled in here."""
+    if not (OPENCODE_DIR.is_dir() or shutil.which("opencode") or (HOME / ".opencode").is_dir()):
+        return False
+    if not add:
+        OPENCODE_PLUGIN.unlink(missing_ok=True)
+        return True
+    src = (ROOT / "hook/opencode-plugin.js").read_text()
+    src = src.replace('"__PYTHON__"', json.dumps(PY)).replace('"__HOOK__"', json.dumps(str(ROOT / "hook" / MARK)))
+    OPENCODE_PLUGIN.parent.mkdir(parents=True, exist_ok=True)
+    OPENCODE_PLUGIN.write_text(src)
+    return True
+
+
 def check():
     """Returns (can run the overlay, list of problems to tell the user about)."""
     problems = []
@@ -220,7 +237,7 @@ def install():
             "Codex CLI: hooks were added to ~/.codex/hooks.json. Codex only runs hooks you have approved: "
             "open Codex, type /hooks and trust the agent-inbox entries."
         )
-    others = [name for name, edit in (("GitHub Copilot", edit_copilot), ("Antigravity", edit_antigravity)) if edit(add=True)]
+    others = [name for name, edit in (("GitHub Copilot", edit_copilot), ("Antigravity", edit_antigravity), ("OpenCode", edit_opencode)) if edit(add=True)]
     if others:
         print(f"Also added hooks for: {', '.join(others)}")
     if edit_claude(add=True):
@@ -239,6 +256,7 @@ def uninstall():
     edit_codex(add=False)
     edit_copilot(add=False)
     edit_antigravity(add=False)
+    edit_opencode(add=False)
     systemctl("disable", "--now", OVERLAY_UNIT.name, DAEMON_UNIT.name)
     DAEMON_UNIT.unlink(missing_ok=True)
     OVERLAY_UNIT.unlink(missing_ok=True)

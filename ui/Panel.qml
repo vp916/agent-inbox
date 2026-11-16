@@ -54,7 +54,7 @@ Rectangle {
     readonly property var spinner: ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
     // which agent a session belongs to: a coloured square and its name
-    readonly property var agentColors: ({ claude: "#d97757", codex: "#19c37d", copilot: "#a371f7", antigravity: "#4c8df6", terminal: "#9aa5ce" })
+    readonly property var agentColors: ({ claude: "#d97757", codex: "#19c37d", copilot: "#a371f7", antigravity: "#4c8df6", opencode: "#fab283", terminal: "#9aa5ce" })
     function badge(s) {
         const agent = s.agent || "claude"
         const where = (s.entry || "").replace("claude-", "")

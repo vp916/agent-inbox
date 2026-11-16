@@ -70,7 +70,7 @@ def is_agent(pid):
     try:
         with open(f"/proc/{pid}/cmdline", "rb") as f:
             cmd = f.read()
-        return b"claude" in cmd or b"codex" in cmd
+        return b"claude" in cmd or b"codex" in cmd or b"opencode" in cmd
     except OSError:
         return False
 
@@ -261,7 +261,7 @@ class Daemon:
         fut = asyncio.get_running_loop().create_future()
         p = self.pending[s.id] = {"fut": fut, "ts": s.attention["ts"], "input": ev.get("tool_input") or {}}
         s.attention["answerable"] = True
-        if s.agent != "claude":  # its own prompt is held back until we answer, so show the card now
+        if s.agent not in ("claude", "opencode"):  # its own prompt is held back until we answer, so show the card now
             self.alert(s.id, p["ts"])
         self.broadcast()
         gone = asyncio.ensure_future(r.read(1))
