@@ -36,6 +36,8 @@ def connect(first):
     try:
         s.connect(SOCK)
     except OSError:
+        if not os.path.exists(os.path.expanduser("~/.config/systemd/user/agent-inbox.service")):  # as install.py
+            sys.exit("agent-inbox is not set up for this user yet. Run (without sudo): agent-inbox-setup install")
         sys.exit("daemon not running. Start it: systemctl --user start agent-inbox")
     s.sendall((json.dumps(first) + "\n").encode())
     return s
